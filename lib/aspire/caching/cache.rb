@@ -65,6 +65,13 @@ module Aspire
         Aspire::Caching::CacheEntry.new(ld_api.canonical_url(url), self)
       end
 
+      # Returns the canonical form of the URL
+      # @param url [String] the URL of the API object
+      # @return [String] the canonical URL of the object
+      def canonical_url(url)
+        ld_api.canonical_url(url)
+      end
+
       # Clears the cache contents
       # @return [void]
       # @raise [Aspire::Cache::Exceptions::RemoveError] if the operation fails
@@ -176,7 +183,7 @@ module Aspire
       # Returns the Aspire tenancy host name
       # @return [String] the Aspire tenancy host name
       def tenancy_host
-        linked_data_api ? linked_data_api.tenancy_host : nil
+        ld_api ? ld_api.tenancy_host : nil
       end
 
       # Writes an API object to the cache
@@ -212,8 +219,9 @@ module Aspire
       #   linked data API
       # @return [Array] the unparsed JSON string and parsed hash from the API
       def read_api(entry, json: false)
-        json ? read_json_api(entry) : read_linked_data_api(entry)
+        data = json ? read_json_api(entry) : read_linked_data_api(entry)
         logger.log(Logger::DEBUG, read_api_msg('read', entry, json))
+        data
       rescue APITimeout, APIError => e
         msg = read_api_msg('read failed', entry, json, e)
         logger.log_exception(msg, ReadError)
@@ -243,7 +251,7 @@ module Aspire
       # @raise [Aspire::Cache::Exceptions::ReadError] if the cache read fails
       def read_cache(entry, json: false)
         data = entry.read(json, parsed: true)
-        msg = "#{url}#{json ? ' [JSON]' : ''} read from cache"
+        msg = "#{entry.url}#{json ? ' [JSON]' : ''} read from cache"
         logger.log(Logger::DEBUG, msg)
         data
       rescue CacheMiss
@@ -257,7 +265,6 @@ module Aspire
         opts = entry.json_api_opt || {}
         url = entry.json_api_url
         json_api.call(url, **opts) do |response, data|
-          logger.log(Logger::DEBUG, "#{entry.url} read from JSON API")
           return response.body, data
         end
       end
@@ -266,10 +273,7 @@ module Aspire
       # @param entry [Aspire::Caching::CacheEntry] the cache entry
       # @return [Array] the unparsed JSON string and parsed hash from the API
       def read_linked_data_api(entry)
-        ld_api.call(entry.url) do |response, data|
-          logger.log(Logger::DEBUG, "#{entry.url} read from LD API")
-          return response.body, data
-        end
+        ld_api.call(entry.url) { |response, data| return response.body, data }
       end
 
       # Writes data to the cache
@@ -278,7 +282,8 @@ module Aspire
       # @return [void]
       # @raise [Aspire::Caching::Exceptions::WriteError] if the operation fails
       def write_cache(entry, data = nil, json: false)
-        entry.write(data, json: json)
+        entry.write(data, json)
+        file_path = entry.path(json)
         logger.log(Logger::INFO, "#{entry.url} written to cache [#{file_path}]")
       rescue WriteError => e
         logger.log(Logger::ERROR, e.to_s)

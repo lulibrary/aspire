@@ -4,31 +4,29 @@ module Aspire
   module Object
     # The abstract base class of reading list objects (items, lists, sections)
     class ListBase < Aspire::Object::Base
-      # The Aspire Linked Data API returns properties of the form
+      # The Aspire linked data API returns properties of the form
       # "#{KEY_PREFIX}_n" where n is a 1-based numeric index denoting the
       # display order of the property.
       KEY_PREFIX = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#'.freeze
 
       # @!attribute [rw] entries
-      #   @return [Array<LegantoSync::ReadingLists::Aspire::ListObject>]
-      #     the ordered list of child objects
+      #   @return [Array<Aspire::Object::ListBase>] the ordered list of child
+      #     objects
       attr_accessor :entries
 
       # @!attribute [rw] parent
-      #   @return [LegantoSync::ReadingLists::Aspire::ListObject]
-      #     the parent reading list object of this object
+      #   @return [Aspire::Object::ListBase] the parent reading list object of
+      #     this object
       attr_accessor :parent
 
-      # Initialises a new ReadingListBase instance
+      # Initialises a new ListBase instance
       # @param uri [String] the reading list object URI (item/list/section)
-      # @param factory [LegantoSync::ReadingLists::Aspire::Factory]
-      #   a factory returning ReadingListBase subclass instances
-      # @param parent [LegantoSync::ReadingLists::Aspire::ListObject]
+      # @param factory [Aspire::Object::Factory]
+      #   a factory returning ListBase subclass instances
+      # @param parent [Aspire::Object::ListBase]
       #   the parent reading list object of this object
-      # @param json [Hash] the parsed JSON data hash containing the properties
-      #   of the ReadingListBase instance from the Aspire JSON API
-      # @param ld [Hash] the parsed JSON data hash containing the properties
-      #   of the ReadingListBase instance from the Aspire Linked Data API
+      # @param json [Hash] the parsed JSON data from the Aspire JSON API
+      # @param ld [Hash] the parsed JSON data from the Aspire linked data API
       # @return [void]
       def initialize(uri, factory, parent = nil, json: nil, ld: nil)
         super(uri, factory)
@@ -38,14 +36,15 @@ module Aspire
 
       # Iterates over the child reading list objects in display order
       # @yield [entry] passes the child reading list object to the block
-      # @yieldparam entry [LegantoSync::ReadingLists::Aspire::ReadingListBase] the reading list object
+      # @yieldparam entry [Aspire::Object::ListBase] the reading list object
       def each(&block)
-        self.entries.each(&block)
+        entries.each(&block)
       end
 
-      # Iterates over the child list items in display order (depth-first tree traversal)
+      # Iterates over the child list items in display order (depth-first tree
+      # traversal)
       # @yield [entry] passes the list item to the block
-      # @yieldparam entry [LegantoSync::ReadingLists::Aspire::ListItem] the reading list item
+      # @yieldparam entry [Aspire::Object::ListItem] the reading list item
       # @return [void]
       def each_item(&block)
         each do |entry|
@@ -60,9 +59,10 @@ module Aspire
         nil
       end
 
-      # Iterates over the child list sections in display order (depth-first tree traversal)
+      # Iterates over the child list sections in display order (depth-first tree
+      # traversal)
       # @yield [entry] passes the list section to the block
-      # @yieldparam entry [LegantoSync::ReadingLists::Aspire::ListSection] the reading list section
+      # @yieldparam entry [Aspire::Object::ListSection] the reading list section
       # @return [void]
       def each_section(&block)
         each do |entry|
@@ -78,23 +78,26 @@ module Aspire
       end
 
       # Returns a list of child reading list objects in display order
-      # @param json [Hash] the parsed JSON data hash from the Aspire JSON API
-      # @param ld [Hash] the parsed JSON data hash from the Aspire linked data API
-      # @return [Array<LegantoSync::ReadingLists::Aspire::ListObject>] the ordered list of child objects
+      # @param json [Hash] the parsed JSON data from the Aspire JSON API
+      # @param ld [Hash] the parsed JSON data from the Aspire linked data API
+      # @return [Array<Aspire::Object::ListBase>]
+      #   the ordered list of child objects
       def get_entries(json: nil, ld: nil)
         entries = []
         data = ld ? ld[self.uri] : nil
         if data
           data.each do |key, value|
             prefix, index = key.split('_')
-            entries[index.to_i - 1] = self.factory.get(value[0]['value'], self, ld: ld) if prefix == KEY_PREFIX
+            next unless prefix == KEY_PREFIX
+            uri = value[0]['value']
+            entries[index.to_i - 1] = factory.get(uri, self, ld: ld)
           end
         end
         entries
       end
 
       # Returns the child items of this object in display order
-      # @return [Array<LegantoSync::ReadingLists::Aspire::ListItem>] the child reading list items
+      # @return [Array<Aspire::Object::ListItem>] the child reading list items
       def items
         result = []
         each_item { |item| result.push(item) }
@@ -240,7 +243,7 @@ module Aspire
       # @param json [Hash] the data containing the properties of the
       #   ReadingListBase instance from the Aspire JSON API
       # @param ld [Hash] the data containing the properties of the
-      #   ReadingListBase instance from the Aspire Linked Data API
+      #   ReadingListBase instance from the Aspire linked data API
       # @return [void]
       def initialize(uri, factory, parent = nil, json: nil, ld: nil)
         # Set properties from the Reading Lists API
@@ -249,7 +252,7 @@ module Aspire
         json = self.set_data(uri, factory, json)
         # Initialise the superclass
         super(uri, factory)
-        # Set properties from the Linked Data API data
+        # Set properties from the linked data API data
         set_linked_data(uri, factory, ld)
       end
 
@@ -385,7 +388,7 @@ module Aspire
       # @param json [Hash] the parsed JSON data hash containing the properties
       #   of the ReadingListBase instance from the Aspire JSON API
       # @param ld [Hash] the parsed JSON data hash containing the properties of
-      #   the ReadingListBase instance from the Aspire Linked Data API
+      #   the ReadingListBase instance from the Aspire linked data API
       # @return [void]
       def initialize(uri, factory, parent = nil, json: nil, ld: nil)
         super(uri, factory, parent, json: json, ld: ld)
@@ -492,7 +495,7 @@ module Aspire
       # @param json [Hash] the parsed JSON data hash containing the properties
       #   of the ReadingListBase instance from the Aspire JSON API
       # @param ld [Hash] the parsed JSON data hash containing the properties of
-      #   the ReadingListBase instance from the Aspire Linked Data API
+      #   the ReadingListBase instance from the Aspire linked data API
       # @return [void]
       def initialize(uri, factory, parent = nil, json: nil, ld: nil)
         super(uri, factory, parent, json: json, ld: ld)

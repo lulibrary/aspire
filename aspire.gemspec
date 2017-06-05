@@ -33,6 +33,7 @@ Gem::Specification.new do |spec|
   spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
   spec.require_paths = ['lib']
 
+  spec.add_dependency 'loofah', '~>2.0.3'
   spec.add_dependency 'rest-client', '~>2.0.2'
 
   spec.add_development_dependency 'bundler', '~> 1.14'

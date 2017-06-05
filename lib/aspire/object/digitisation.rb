@@ -2,10 +2,8 @@ require 'aspire/object/base'
 
 module Aspire
   module Object
-
     # Represents a digitisation record in the Aspire API
     class Digitisation < Base
-
       # @!attribute [rw] bundle_id
       #   @return [String] the digitisation bundle ID
       attr_accessor :bundle_id
@@ -19,7 +17,9 @@ module Aspire
       attr_accessor :request_status
 
       # Initialises a new Digitisation instance
-      # @param data [Hash] the parsed JSON data hash of the digitisation record
+      # @param json [Hash] the parsed JSON data from the JSON API
+      # @param ld [Hash] the parsed JSON data from the linked data API
+      # @return [void]
       def initialize(json: nil, ld: nil)
         if json
           self.bundle_id = json['bundleId']
@@ -32,13 +32,12 @@ module Aspire
         end
       end
 
-      # Returns a string representation of the Digitisation instance (the request ID)
+      # Returns a string representation of the Digitisation instance (the
+      # request ID)
       # @return [String] the string representation of the Digitisation instance
       def to_s
-        self.request_id.to_s
+        request_id.to_s
       end
-
     end
-
   end
 end

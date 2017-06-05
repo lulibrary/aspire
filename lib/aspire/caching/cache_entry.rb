@@ -1,4 +1,5 @@
 require 'aspire/caching/exceptions'
+require 'aspire/caching/util'
 require 'aspire/util'
 
 module Aspire
@@ -6,26 +7,8 @@ module Aspire
     # Represents an entry in the cache
     class CacheEntry
       include Aspire::Caching::Exceptions
+      include Aspire::Caching::Util
       include Aspire::Util
-
-      # Rules for determining whether an object URL is cacheable
-      # Each rule is a Proc which accepts a parsed URL from #parse_url and the
-      # CacheEntry instance, and returns true if the object is cacheable or
-      # false if not. Rules are applied in the order specified and all rules
-      # must return true for an object to be cacheable.
-      CACHEABLE = [
-        # The URL must be set and the host must mach the canonical tenancy host
-        proc { |u, e| u && e.cache.tenancy_host == t },
-        # Catalog objects are not cacheable
-        proc { |u, _e| u[:type] != 'catalog' },
-        # User objects themselves are not cacheable but child objects e.g. notes
-        # are cacheable
-        proc { |u, _e| u[:type] != 'users' || !u[:child_type].nil? },
-        # Importance URI values are not cacheable
-        proc do |u, _e|
-          u[:type] != 'config' || !u[:uri].to_s.start_with?('importance')
-        end
-      ].freeze
 
       # @!attribute [rw] cache
       #   @return [Aspire::Caching::Cache] the cache
@@ -67,10 +50,28 @@ module Aspire
         self.url = url
       end
 
+      # Returns true if cache entries refer to the same object
+      # @param other [Aspire::Caching::CacheEntry, String] a cache entry or URL
+      # @return [Boolean] true if the entries refer to the same object
+      def ==(other)
+        url == url_for_comparison(other, cache.ld_api)
+      end
+
+      # Returns true if this cache entry is a child of the URL
+      # @param url [Aspire::Caching::CacheEntry, String] the URL to test
+      # @param strict [Boolean] if true, the URL must be a parent of this entry,
+      #   otherwise the URL must be a parent or the same as this entry
+      # @return [Boolean] true if the URL is a child of the cache entry, false
+      #   otherwise
+      def child_of?(url, strict: false)
+        child_url?(parsed_url, url, cache.ld_api, strict: strict)
+      end
+
       # Returns true if the object is in the cache, false if not
       # @return [Boolean] true if the object is cached, false if not
-      def cached?
-        File.exist?(file)
+      def cached?(json = false)
+        filename = json ? json_file : file
+        return filename.nil? ? nil : File.exist?(filename)
       end
 
       # Deletes the object from the cache
@@ -97,19 +98,32 @@ module Aspire
         File.join(cache.path, url_path)
       end
 
-      # Returns true if the object has cached JSON API data, false if not
-      # @return [Boolean] true if the object has cached JSON API data, false
-      #   if the object has no associated JSON API data or the data is not
-      #   cached
+      # Returns true if the object has associated JSON API data, false if not
+      # @return [Boolean] true if the object has associated JSON API data, false
+      #   otherwise
       def json?
-        filename = json_file
-        !filename.nil? && File.exist?(filename)
+        !json_api_url.nil? && !json_api_url.empty?
       end
 
-      # Returns the JSON API data filename in the cache
+      # Returns the JSON API data filename in the cache or nil if there is no
+      # JSON API data for the URL
       # @param filename [String] the linked data filename in the cache
+      # @return [String, nil] the JSON API data filename or nil if there is no
+      #   JSON API data for the URL
       def json_file(filename = nil)
-        json? ? add_filename_suffix(filename || file) : nil
+        json? ? add_filename_suffix(filename || file, '-json') : nil
+      end
+
+      # Returns true if the cache entry is a list, false otherwise
+      # @param strict [Boolean] if true, the cache entry must be a list,
+      #   otherwise the cache entry must be a list or a child of a list
+      # @return [Boolean] true if the cache entry is a list, false otherwise
+      def list?(strict: true)
+        # The cache entry must be a list or the child of a list
+        return false unless parsed_url[:type] == 'lists'
+        # Strict checking requires that the cache entry is a list, not a child
+        return false if strict && !parsed_url[:child_type].nil?
+        true
       end
 
       # Marks the cache entry as in-progress
@@ -135,6 +149,16 @@ module Aspire
         File.exist?(status_file)
       end
 
+      # Returns true if this cache entry is the parent of the URL
+      # @param url [Aspire::Caching::CacheEntry, String] the URL to test
+      # @param strict [Boolean] if true, the URL must be a parent of this entry,
+      #   otherwise the URL must be a parent or the same as this entry
+      # @return [Boolean] true if this cache entry is the parent of the URL,
+      #   false otherwise
+      def parent_of?(url, strict: false)
+        parent_url?(parsed_url, url, cache.ld_api, strict: strict)
+      end
+
       # Returns the filename of the cache entry
       # @param json [Boolean] if true, returns the JSON API filename, otherwise
       #   returns the linked data API filename
@@ -143,8 +167,17 @@ module Aspire
       end
 
       # Returns data from the cache
+      # @param json [Boolean] if true, read the JSON API file, otherwise read
+      #   the linked data API file
+      # @param parsed [Boolean] if true, return JSON-parsed data, otherwise
+      #   return a JSON string
+      # @return [Array, Hash, String, nil] the parsed JSON data or JSON string,
+      #   or nil if JSON API data is requested but not available for this entry
+      # @raise [Aspire::Caching::CacheMiss] when the data is not in the cache
+      # @raise [Aspire::Caching::ReadError] when the read operation fails
       def read(json = false, parsed: false)
-        filename = json ? file : json_file
+        filename = json ? json_file : file
+        return nil if filename.nil? || filename.empty?
         File.open(filename, 'r') do |f|
           data = f.read
           return parsed ? JSON.parse(data) : data
@@ -170,6 +203,12 @@ module Aspire
         add_filename_prefix(filename || file, '.')
       end
 
+      # Returns a string representation of the cache entry
+      # @return [String] the string representation (URL) of the cache entry
+      def to_s
+        url
+      end
+
       # Removes an in-progress mark from the cache entry
       def unmark
         filename = status_file
@@ -184,10 +223,14 @@ module Aspire
       # @raise [Aspire::Caching::Exceptions::NotCacheable] if the URL is not
       #   cacheable
       def url=(u)
+        # Convert the URL to canonical form for comparison
+        u = cache.canonical_url(u)
+        # Parse and check the URL
+        # - this will raise NotCacheable if it is not a valid cacheable URL
         self.parsed_url = cacheable_url(u)
+        # Set the URL properties
         @url = u
-        # Derive the remaining properties from the URL
-        return unless list_url?(parsed: u)
+        return unless list_url?(parsed: parsed_url)
         self.json_api_opt = { bookjacket: 1, editions: 1, draft: 1, history: 1 }
         self.json_api_url = "lists/#{strip_ext(parsed_url[:id])}"
       end
@@ -198,8 +241,11 @@ module Aspire
       #   otherwise write it as linked data
       # @param parsed [Boolean] if true, treat data as a parsed JSON data
       #   structure, otherwise treat it as a JSON string
+      # @return [void]
+      # @raise [Aspire::Caching::WriteError] when the write operation fails
       def write(data, json = false, parsed: false)
         filename = json ? json_file : file
+        return if filename.nil? || filename.empty?
         # Create the path to the file
         FileUtils.mkdir_p(File.dirname(filename), mode: cache.mode)
         # Write the data
@@ -212,19 +258,6 @@ module Aspire
       end
 
       private
-
-      # Parses the URL and checks that it is cacheable
-      # @param u [String] the URL of the API object
-      # @return [MarchData] the parsed URL
-      # @raise [Aspire::Caching::Exceptions::NotCacheable] if the URL is not
-      #   cacheable
-      def cacheable_url(u)
-        # All rules must return true for the URL to be cacheable
-        u = parse_url(u)
-        CACHEABLE.each { |r| raise NotCacheable unless r.call(u, self) }
-        # Return the parsed URL
-        u
-      end
 
       # Deletes children of the cache entry
       # @param filename [String] the linked data API filename
@@ -262,24 +295,11 @@ module Aspire
       #   for any reason other than the file not existing
       def delete_file(filename)
         File.delete(filename) unless filename.nil? || filename.empty?
-        nil
       rescue Errno::ENOENT
         # Ignore file-does-not-exist errors
         nil
       rescue SystemCallError => e
         raise RemoveError, "#{url} remove failed [#{filename}]: #{e}"
-      end
-
-      # Returns the path from the URL as a relative filename
-      def url_path
-        # Get the path component of the URL as a relative path
-        filename = URI.parse(url).path
-        filename.slice!(0) # Remove the leading /
-        # Return the path with '.json' extension if not already present
-        filename.end_with?('.json') ? filename : "#{filename}.json"
-      rescue URI::InvalidComponentError, URI::InvalidURIError
-        # Return nil if the URL is invalid
-        nil
       end
     end
   end

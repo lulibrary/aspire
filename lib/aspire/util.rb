@@ -4,11 +4,34 @@ module Aspire
     # Regular expression to parse a Linked Data API URI
     LD_API_URI = Regexp.new('https?://(?<tenancy_host>[^/]*)/' \
                             '(?<type>[^/]*)/' \
-                            '(?<id>[^/]*)' \
+                            '(?<id>[^/\.]*)' \
+                            '(\.(?<format>[^/]*))?' \
                             '(/' \
-                            '(?<child_type>[^/]*)' \
-                            '(/(?<child_id>[^/]*))?' \
+                            '(?<child_type>[^/.]*)' \
+                            '(/(?<child_id>[^/\.]*))?' \
+                            '(\.(?<child_format>[^/]*))?' \
                             ')?').freeze
+
+    # Returns true if the first URL is the child of the second URL
+    # @param url1 [Aspire::Caching::CacheEntry, String] the first URL
+    # @param url2 [Aspire::Caching::CacheEntry, String] the second URL
+    # @param api [Aspire::API::LinkedData] the API for generating canonical URLs
+    # @param strict [Boolean] if true, the URL must be a parent of this entry,
+    #   otherwise the URL must be a parent or the same as this entry
+    # @return [Boolean] true if the URL is a child of the cache entry, false
+    #   otherwise
+    def child_url?(url1, url2, api = nil, strict: false)
+      parent_url?(url2, url1, api, strict: strict)
+    end
+
+    # Returns a HH:MM:SS string given a Benchmark time
+    # @param benchmark_time [Benchmark:Tms] the Benchmark time object
+    # @return [String] the HH:HM:SS string
+    def duration(benchmark_time)
+      secs = benchmark_time.real
+      hours = secs / 3600
+      format('%2.2d:%2.2d:%2.2d', hours, hours % 60, secs % 60)
+    end
 
     # Returns the ID of an object from its URL
     # @param u [String] the URL of the API object
@@ -16,98 +39,6 @@ module Aspire
     def id_from_uri(u, parsed: nil)
       parsed ||= parse_url(u)
       parsed[:id]
-    end
-
-    # Enumerates the property/value pairs of a JSON data structure
-    # @param key [String] the property name
-    # @param value [Object] the property value
-    # @param yielder [Enumerator::Yielder] the yielder from the Enumerator
-    # @param hooks [Hash] the callback hooks
-    # @param index [Integer] the index of the property in its parent array, or
-    #   nil if not part of an array
-    # @return [void]
-    def json_enum(key, value, yielder, hooks = nil, index = nil)
-      if value.is_a?(Array)
-        json_enum_array(key, value, yielder, hooks)
-      elsif value.is_a?(Hash)
-        json_enum_hash(value, yielder, hooks)
-      else
-        json_enum_yield(key, value, yielder, hooks, index)
-      end
-    end
-
-    # Enumerates an array of JSON data structures
-    # @param key [String] the property name
-    # @param array [Object] the property value
-    # @param yielder [Enumerator::Yielder] the yielder from the Enumerator
-    # @return [void]
-    def json_enum_array(key, array, yielder, hooks = nil)
-      return unless json_enum_hook(:pre_array, hooks, key, array, yielder)
-      i = 0
-      array.each do |value|
-        json_enum(key, value, yielder, hooks, i)
-        i += 1
-      end
-      json_enum_hook(:post_array, hooks, key, array, yielder, i)
-    end
-
-    # Enumerates the property/value pairs of a JSON hash
-    # @param hash [Hash] the hash to enumerate
-    # @param yielder [Enumerator::Yielder] the yielder from the Enumerator
-    # @param index [Integer] the index of the property in its parent array, or
-    #   nil if not part of an array
-    # @return [void]
-    def json_enum_hash(hash, yielder, hooks = nil, index = nil)
-      return unless json_enum_hook(:pre_hash, hooks, hash, yielder, index)
-      hash.each do |key, value|
-        if value.is_a?(Array) || value.is_a?(Hash)
-          json_enum(key, value, yielder, hooks)
-        else
-          json_enum_yield(key, value, yielder, hooks, index)
-        end
-      end
-      json_enum_hook(:post_hash, hooks, hash, yielder, index)
-    end
-
-    # Runs a JSON enumeration hook
-    # @param hook [Symbol] the hook name
-    # @param hooks [Hash] the hook definitions
-    # @return [Boolean] true if the hook returns a true value, false otherwise
-    def json_enum_hook(hook, hooks = nil, *args, **kwargs)
-      # Return true on invalid hooks to allow processing to continue
-      return true unless hooks && hooks[hook] && hooks[hook].respond_to?(:call)
-      # Call the hook
-      hooks[hook].call(*args, **kwargs) ? true : false
-    end
-
-    # Enumerates the property/value pairs of a JSON data structure
-    # @param key [String] the property name
-    # @param value [Object] the property value
-    # @param yielder [Enumerator::Yielder] the yielder from the Enumerator
-    # @param hooks [Hash] the callback hooks
-    # @param index [Integer] the index of the property in its parent array, or
-    #   nil if not part of an array
-    # @return [void]
-    def json_enum_yield(key, value, yielder, hooks = nil, index = nil)
-      return unless json_enum_hook(:before_yield, hooks, key, value, index)
-      yielder << [key, value, index]
-      json_enum_hook(:after_yield, hooks, key, value, index)
-    end
-
-    # Returns an enumerator enumerating property/value pairs of JSON data
-    # @param key [String] the initial key of the data
-    # @param value [Object] the initial value of the data
-    # @param hooks [Hash] processing callback hooks
-    #   { after_array: proc { |key, array, yielder, index| },
-    #     after_hash: proc  { |array, yielder, index| },
-    #     after_yield: proc { |key, value, yielder, index| },
-    #     before_array: proc { |key, array, yielder, index| },
-    #     before_hash: proc { |array, yielder, index| },
-    #     before_yield: proc { |key, array, yielder, index| }
-    #   }
-    # @return [Enumerator] the JSON enumerator
-    def json_enumerator(key, value, **hooks)
-      Enumerator.new { |yielder| json_enum(key, value, yielder, hooks) }
     end
 
     # Returns true if a URL is a list URL, false otherwise
@@ -118,6 +49,21 @@ module Aspire
       parsed ||= parse_url(u)
       child_type = parsed[:child_type]
       parsed[:type] == 'lists' && (child_type.nil? || child_type.empty?)
+    end
+
+    # Returns true if the first URL is the parent of the second URL
+    # @param url1 [Aspire::Caching::CacheEntry, String] the first URL
+    # @param url2 [Aspire::Caching::CacheEntry, String] the second URL
+    # @param api [Aspire::API::LinkedData] the API for generating canonical URLs
+    # @return [Boolean] true if the URL has the same parent as this entry
+    def parent_url?(url1, url2, api = nil, strict: false)
+      u1 = url_for_comparison(url1, api, parsed: true)
+      u2 = url_for_comparison(url2, api, parsed: true)
+      same_parent = u1[:type] == u2[:type] && u1[:id] == u2[:id]
+      # Non-strict comparison requires only the same parent object
+      return same_parent unless strict
+      # Strict comparison requires that this entry is a child of the URL
+      same_parent && u1[:child_type].nil? && !u2[:child_type].nil?
     end
 
     # Returns the components of an object URL
@@ -134,21 +80,32 @@ module Aspire
       url ? LD_API_URI.match(url) : nil
     end
 
-    # Returns a file path from a URL path
-    # @param u [String] the URL of the API object
-    # @param file_root [String] the root of the file path
-    # @return [String] the file path
-    def url_to_path(url, file_root)
+    # Returns a parsed or unparsed URL for comparison
+    # @param url [Aspire::Caching::CacheEntry, String] the URL
+    # @param api [Aspire::API::LinkedData] the API for generating canonical URLs
+    # @param parsed [Boolean] if true, return a parsed URL, otherwise return
+    #   an unparsed URL string
+    # @return [Aspire::Caching::CacheEntry, String] the URL for comparison
+    def url_for_comparison(url, api = nil, parsed: false)
+      if url.is_a?(MatchData) && parsed
+        url
+      elsif parsed && url.respond_to?(:parsed_url)
+        url.parsed_url
+      elsif !parsed && url.respond_to?(url)
+        url.url
+      else
+        result = api.nil? ? url.to_s : api.canonical_url(url.to_s)
+        parsed ? parse_url(result) : result
+      end
+    end
+
+    # Returns the path from the URL as a relative filename
+    def url_path
       # Get the path component of the URL as a relative path
-      path = URI.parse(url).path
-      path.slice!(0)
-      # Prepend the filesystem root path to the relative URL path
-      path = File.join(file_root, path)
-      # Add '.json' extension if not already present
-      ext = File.extname(path)
-      path = "#{path}.json" if ext.nil? || ext.empty?
-      # Return the filesystem path
-      path
+      filename = URI.parse(url).path
+      filename.slice!(0) # Remove the leading /
+      # Return the path with '.json' extension if not already present
+      filename.end_with?('.json') ? filename : "#{filename}.json"
     rescue URI::InvalidComponentError, URI::InvalidURIError
       # Return nil if the URL is invalid
       nil

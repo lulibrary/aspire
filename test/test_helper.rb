@@ -14,6 +14,10 @@ class Test < Minitest::Test
     @logger = logger
   end
 
+  def teardown
+    @log_file.close if @log_file
+  end
+
   private
 
   def api_opts
@@ -47,7 +51,8 @@ class Test < Minitest::Test
   end
 
   def logger
-    logger = Logger.new(STDOUT)
+    @log_file = ENV['ASPIRE_LOG']
+    logger = Logger.new("| tee #{@log_file}") # @log_file || STDOUT)
     logger.datetime_format = '%Y-%m-%d %H:%M:%S'
     logger.formatter = proc do |severity, datetime, _program, msg|
       "#{datetime} [#{severity}]: #{msg}\n"
@@ -81,8 +86,10 @@ class CacheTestBase < Test
 
   def cache_env
     @cache_path = ENV['ASPIRE_CACHE_PATH']
+    @list_report = ENV['ASPIRE_LIST_REPORT']
     @list_url1 = ENV['ASPIRE_LIST_URL1']
     @list_url2 = ENV['ASPIRE_LIST_URL2']
+    @list_url3 = ENV['ASPIRE_LIST_URL3']
     @mode = ENV['ASPIRE_CACHE_MODE']
     @mode = @mode.nil? || @mode.empty? ? 0o700 : @mode.to_i(8)
     required(@cache_path, @list_url1, @list_url2)

@@ -64,6 +64,9 @@ module Aspire
         return nil unless valid_host?(url)
         # Replace the host name with the canonical host name
         url.host = tenancy_host
+        # Add '.json' suffix if required
+        url.path = "#{url.path}.json" unless url.path.end_with?('.json')
+        # Return the URL string
         url.to_s
       rescue URI::InvalidComponentError, URI::InvalidURIError
         return nil

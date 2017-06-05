@@ -2,6 +2,7 @@ require 'fileutils'
 require 'json'
 require 'uri'
 
+require 'aspire/caching/exceptions'
 require 'aspire/util'
 
 module Aspire
@@ -10,6 +11,25 @@ module Aspire
     # Cache utility methods
     module Util
       include Aspire::Util
+
+      # Rules for determining whether an object URL is cacheable
+      # Each rule is a Proc which accepts a parsed URL from #parse_url and the
+      # CacheEntry instance, and returns true if the object is cacheable or
+      # false if not. Rules are applied in the order specified and all rules
+      # must return true for an object to be cacheable.
+      CACHEABLE = [
+        # The URL must be set and the host must mach the canonical tenancy host
+        proc { |u, e| u && u[:tenancy_host] == e.cache.tenancy_host },
+        # Catalog objects are not cacheable
+        proc { |u, _e| u[:type] != 'catalog' },
+        # User objects themselves are not cacheable but child objects e.g. notes
+        # are cacheable
+        proc { |u, _e| u[:type] != 'users' || !u[:child_type].nil? },
+        # Importance URI values are not cacheable
+        proc do |u, _e|
+          u[:type] != 'config' || !u[:id].to_s.start_with?('importance')
+        end
+      ].freeze
 
       # Adds a prefix to a filename
       # @param filename [String] the filename
@@ -30,6 +50,21 @@ module Aspire
         filename[2] = filename[1]
         filename[1] = suffix
         filename.join
+      end
+
+      # Parses the URL and checks that it is cacheable
+      # @param u [String] the URL of the API object
+      # @return [MarchData] the parsed URL
+      # @raise [Aspire::Caching::Exceptions::NotCacheable] if the URL is not
+      #   cacheable
+      def cacheable_url(u)
+        # All rules must return true for the URL to be cacheable
+        u = parse_url(u)
+        CACHEABLE.each do |r|
+          raise Aspire::Caching::Exceptions::NotCacheable unless r.call(u, self)
+        end
+        # Return the parsed URL
+        u
       end
 
       # Returns true if the directory path has no more parents, false otherwise
@@ -57,6 +92,20 @@ module Aspire
         message = "#{failure}: #{e}"
         raise WriteError, message if logger.nil?
         logger.log_exception(message, WriteError)
+      end
+
+      # Returns the list of URI references from a linked data API object
+      # @param url [String] the URL of the API object
+      # @param data [Hash] the parsed JSON data for the object
+      # @return [Array<String>] the list of URIs referenced by the object
+      def references(url, data = nil)
+        return [] if data.nil? || data.empty?
+        # Enumerate the URIs and add them as keys of a hash to de-duplicate
+        enum = LinkedDataURIEnumerator.new.enumerator(url, data)
+        uris = {}
+        enum.each { |_k, hash, _i| uris[hash['value']] = true }
+        # Return the list of URIs
+        uris.keys
       end
 
       # Removes the specified files
