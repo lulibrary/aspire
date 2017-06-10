@@ -9,67 +9,54 @@ module Aspire
     class Factory
       include Aspire::Util
 
-      # @!attribute [rw] api
-      #   @return [LegantoSync::ReadingLists::Aspire::API] the Aspire API instance used to retrieve data
-      attr_accessor :api
-
-      # @!attribute [rw] email_selector
-      #   @return [LegantoSync::ReadingLists::Aspire::EmailSelector] the email selector for identifying users'
-      #     primary email addresses
-      attr_accessor :email_selector
-
-      # @!attribute [rw] ldap_lookup
-      #   @return [LegantoSync::ReadingLists::Aspire::LDAPLookup] the LDAP lookup instance for identifying users'
-      #     usernames
-      attr_accessor :ldap_lookup
+      # @!attribute [rw] cache
+      #   @return [Aspire::Caching::Cache] the cache for retrieving data
+      attr_accessor :cache
 
       # @!attribute [rw] users
-      #   @return [Hash<String, LegantoSync::ReadingLists::Aspire::User>] a hash of user profiles indexed by URI
+      #   @return [Hash<String, Aspire::Object::User>] a hash of user profiles
+      #     indexed by URI
       attr_accessor :users
 
       # Initialises a new ReadingListFactory instance
-      # @param api [LegantoSync::ReadingLists::Aspire::API] the Aspire API instance used to retrieve data
-      # @param users [Hash<String, LegantoSync::ReadingLists::Aspire::User>] a hash mapping user profile URIs to users
+      # @param cache  [Aspire::Caching::Cache] the cache for retrieving data
+      # @param users [Hash<String, Aspire::Object::User>] a hash of user
+      #   profiles indexed by URI
       # @return [void]
-      def initialize(api, email_selector: nil, ldap_lookup: nil, users: nil)
+      def initialize(cache, users: nil)
         self.api = api
-        self.email_selector = email_selector
-        self.ldap_lookup = ldap_lookup
         self.users = users || {}
       end
 
-      # Returns a new reading list object (ReadingListBase subclass) given its URI
+      # Returns a new API list object (Aspire::Object::ListBase subclass) given
+      # its URI
       # @param uri [String] the URI of the object
-      # @param parent [LegantoSync::ReadingLists::Aspire::ListObject] the parent reading list object of this object
-      # @return [LegantoSync::ReadingLists::Aspire::ListObject] the reading list object
+      # @param parent [Aspire::Object::ListBase] this object's parent object
+      # @param json [Hash] the parsed JSON API data for the object
+      # @param ld [Hash] the parsed linked data API data for the object
+      # @return [Aspire::Object::ListBase] the list object
       def get(uri = nil, parent = nil, json: nil, ld: nil)
         return nil if uri.nil? || uri.empty?
-        if uri.include?('/items/')
-          # Get item data from the parent list (from the JSON API) rather than the Linked Data API
-          ListItem.new(uri, self, parent)
-        elsif uri.include?('/resources/') && !json.nil?
-          # Get resource data from the JSON API rather than the Linked Data API if available
-          Resource.new(uri, self, json: json, ld: ld)
-        elsif uri.include?('/users/')
-          get_user(uri, ld)
-        else
-          # Get lists, modules, resources and sections from the Linked Data API
-          # If the URI is present in the linked data hash, the corresponding data is used. Otherwise, the data is
-          # loaded from the linked data API.
-          puts(uri)
-          ld = self.api.get_json(uri, expand_path: false) if ld.nil? || !ld.has_key?(uri)
-          if uri.include?('/lists/')
-            List.new(uri, self, parent, json: json, ld: ld)
-          elsif uri.include?('/modules/')
-            Module.new(uri, self, json: json, ld: ld)
-          elsif uri.include?('/resources/')
-            Resource.new(uri, self, json: json, ld: ld)
-          elsif uri.include?('/sections/')
-            ListSection.new(uri, self, parent, json: json, ld: ld)
-          else
-            nil
-          end
-        end
+        # Get item data from the parent list (from the JSON API) rather than the Linked Data API
+        return ListItem.new(uri, self, parent) if uri.include?('/items/')
+        # Get resource data from the JSON API rather than the Linked Data API if available
+        return Resource.new(uri, self, json: json, ld: ld) if uri.include?('/resources/') && !json.nil?
+        # Get user data from the users hash
+        return get_user(uri, ld) if uri.include?('/users/')
+        # Get lists, modules, resources and sections from the Linked Data API
+        get_linked_data(uri, parent, json: json, ld: ld)
+      end
+
+      def get_linked_data(uri, parent = nil, json: nil, ld: nil)
+        # If the URI is present in the linked data hash, the corresponding data is used. Otherwise, the data is
+        # loaded from the linked data API.
+        puts(uri)
+        ld = self.api.get_json(uri, expand_path: false) if ld.nil? || !ld.has_key?(uri)
+        return List.new(uri, self, parent, json: json, ld: ld) if uri.include?('/lists/')
+        return Module.new(uri, self, json: json, ld: ld) if uri.include?('/modules/')
+        return Resource.new(uri, self, json: json, ld: ld) if uri.include?('/resources/')
+        return ListSection.new(uri, self, parent, json: json, ld: ld) if uri.include?('/sections/')
+        nil
       end
 
       # Returns a new user profile object given its URI

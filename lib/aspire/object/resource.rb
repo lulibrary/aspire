@@ -144,7 +144,8 @@ module Aspire
         self.issued = json ? json['issued'] : nil # TODO
         self.latest_edition = get_property('latestEdition', json)
         self.local_control_number = get_property('lcn', json)
-        self.online_resource = get_property('onlineResource', json) ? true : false
+        # self.online_resource = get_property('onlineResource', json) ? true : false
+        self.online_resource = get_boolean('onlineResource', json)
         self.page = get_property('page', json)
         self.page_end = get_property('pageEnd', json)
         self.page_start = get_property('pageStart', json)

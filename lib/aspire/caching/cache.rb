@@ -62,7 +62,7 @@ module Aspire
       # @param url [String] the URL of the API object
       # @return [Aspire::Caching::CacheEntry] the cache entry
       def cache_entry(url)
-        Aspire::Caching::CacheEntry.new(ld_api.canonical_url(url), self)
+        CacheEntry.new(ld_api.canonical_url(url), self)
       end
 
       # Returns the canonical form of the URL
@@ -101,6 +101,40 @@ module Aspire
       def include?(url = nil, entry: nil)
         entry ||= cache_entry(url)
         entry.cached?
+      end
+
+      # Iterates over a single cache object type and passes the partial object
+      # URLs to the block
+      # @param type [String] the cache object type ('lists', 'resources' etc.)
+      #   or '**' for all object types
+      # @yield [url] passes the partial object URL to the block
+      # @yieldparam url [String] the partial object URL of the list
+      # @return [void]
+      def marked_entry(type)
+        Dir.glob(File.join(path, type, '.[^.]*')) do |filename|
+          # Convert the filename to a URL and pass to the block
+          begin
+            entry = CacheEntry.new(filename_to_url(filename), self)
+            yield(entry) if block_given?
+          rescue NotCacheable
+            nil
+          end
+        end
+      end
+
+      # Iterates over marked (in-progress) cache entries and passes the partial
+      # URL path to the block
+      # Positional parameters are the object types to include, e.g. 'lists',
+      # 'resources' etc. - default: all object types
+      # @yield [url] passes the list URL to the block
+      # @yieldparam url [String] the partial linked data URL of the list
+      # @return [void]
+      def marked_entries(*types, &block)
+        if types.nil? || types.empty?
+          marked_entry('**', &block)
+        else
+          types.each { |type| marked_entry(type, &block) }
+        end
       end
 
       # Sets and creates the root directory of the cache
@@ -212,6 +246,20 @@ module Aspire
       end
 
       private
+
+      # Converts a status filename to a linked data URL
+      # @param filename [String] the filename of a linked data object status
+      #   file in the cache
+      def filename_to_url(filename)
+        # Remove the cache path
+        f = strip_prefix(filename, path)
+        # Remove the leading . from the base filename
+        f = strip_filename_prefix(f, '.')
+        # Remove the leading / from the path
+        f.slice!(0) if f.start_with?('/')
+        # Return the full Aspire linked data URL
+        ld_api.api_url(f)
+      end
 
       # Reads data from the Aspire JSON or linked data APIs
       # @param entry [Aspire::Caching::CacheEntry] the cache entry

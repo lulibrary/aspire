@@ -14,10 +14,6 @@ class Test < Minitest::Test
     @logger = logger
   end
 
-  def teardown
-    @log_file.close if @log_file
-  end
-
   private
 
   def api_opts

@@ -3,6 +3,8 @@ require 'uri'
 
 require 'rest-client'
 
+require 'retry'
+
 module Aspire
   module API
     # The base class for Aspire API wrappers
@@ -45,9 +47,10 @@ module Aspire
         self.logger = opts[:logger]
         self.tenancy_code = tenancy_code
         self.timeout = opts[:timeout] || 0
+        # Retry options
+        initialize_retry(opts)
         # SSL options
-        self.ssl = {}
-        SSL_OPTS.each { |opt| ssl[opt] = opts[opt] }
+        initialize_ssl(opts)
         # Set the RestClient logger
         RestClient.log = logger if logger
       end
@@ -67,13 +70,12 @@ module Aspire
       # @return [(RestClient::Response, Hash)] the REST client response and
       #   parsed JSON data from the response
       def call_api(**rest_options)
-        response = RestClient::Request.execute(**rest_options)
-        json = response && !response.empty? ? ::JSON.parse(response.to_s) : nil
-        call_api_response(response) if respond_to?(:call_api_response)
-        return response, json
-      rescue RestClient::ExceptionWithResponse => e
-        # json = ::JSON.parse(response.to_s) if response && !response.empty?
-        return e.response, nil
+        @retry.do do
+          res = RestClient::Request.execute(**rest_options)
+          json = res && !res.empty? ? ::JSON.parse(res.to_s) : nil
+          call_api_response(res) if respond_to?(:call_api_response)
+          [res, json]
+        end
       end
 
       # Returns the HTTP headers for an API call
@@ -83,6 +85,7 @@ module Aspire
       def call_rest_headers(headers, params)
         rest_headers = {}.merge(headers || {})
         rest_headers[:params] = params if params && !params.empty?
+        rest_headers
       end
 
       # Returns the REST client options for an API call
@@ -113,6 +116,57 @@ module Aspire
         SSL_OPTS.each { |opt| rest_options[opt] = ssl[opt] if ssl[opt] }
         rest_options[:timeout] = timeout > 0 ? timeout : nil
         rest_options
+      end
+
+      # Initialises retry options
+      # @param opts [Hash] the options hash
+      # @return [void]
+      def initialize_retry(opts)
+        @retry = Retry::Engine.new(delay: opts[:retry_delay] || 5,
+                                   exceptions: initialize_retry_exceptions,
+                                   handlers: initialize_retry_handlers,
+                                   tries: opts[:retries] || 5)
+      end
+
+      # Returns a hash of retriable exceptions
+      # @return [Hash<Exception|Symbol, Boolean>] the retriable exceptions
+      def initialize_retry_exceptions
+        [
+          RestClient::ExceptionWithResponse,
+          RestClient::ServerBrokeConnection,
+          RestClient::Exceptions::Timeout
+        ].push(*Retry::Exceptions::SOCKET_EXCEPTIONS)
+      end
+
+      # Returns a hash of retry handlers
+      # @return [Hash<Exception|Symbol, Proc>] the retry handlers
+      def initialize_retry_handlers
+        {
+          :default => proc { |e, _t| log_exception(e) },
+          :retry => proc { |_e, t| logger.debug("Retrying (#{t} tries left)") },
+          RestClient::ExceptionWithResponse => proc do |e, _t|
+            log_exception(e, debug: "Response: #{e}")
+            # json = ::JSON.parse(response.to_s) if response && !response.empty?
+            raise Retry::StopRetry.new([e.response, nil])
+          end
+        }
+      end
+
+      # Sets the SSL options
+      # @param opts [Hash] the options hash
+      def initialize_ssl(opts)
+        self.ssl = {}
+        SSL_OPTS.each { |opt| ssl[opt] = opts[opt] }
+      end
+
+      # Logs an exception
+      # @param e [Exception] the exception
+      # @param debug [String] extra debugging message
+      def log_exception(e, debug: nil)
+        return unless logger
+        logger.error(e.to_s)
+        logger.debug(e.backtrace.join('\n'))
+        logger.debug(debug) if debug
       end
 
       # Returns a URI instance for a URL, treating URLs without schemes or path

@@ -30,15 +30,6 @@ module Aspire
       #   @return [String] the URL
       attr_accessor :url
 
-      # Returns true if the URL is cacheable, false if not
-      # @param u [String] the URL of the API object
-      # @return [Boolean] true if the URL is cacheable, false if not
-      def self.cacheable?(u)
-        cacheable_url(u).nil? ? false : true
-      rescue NotCacheable
-        false
-      end
-
       # Initialises a new CacheEntry instance
       # @param url [String] the URL of the API object
       # @param cache [Aspire::Caching::Cache] the parent cache
@@ -71,7 +62,7 @@ module Aspire
       # @return [Boolean] true if the object is cached, false if not
       def cached?(json = false)
         filename = json ? json_file : file
-        return filename.nil? ? nil : File.exist?(filename)
+        filename.nil? ? nil : File.exist?(filename)
       end
 
       # Deletes the object from the cache
@@ -82,14 +73,7 @@ module Aspire
       # @raise [Aspire::Caching::Exceptions::MarkedError] if the entry is
       #   marked in-progress and force = false
       def delete(force: false, remove_children: false)
-        mark { |_f| delete_entry(file, remove_children) }
-      rescue MarkedError
-        # Raise the exception if not forcing the deletion
-        raise unless force
-        # Otherwise unmark the file and retry
-        unmark
-        force = false # If the retry fails, raise the exception
-        retry
+        mark(force: force) { |_f| delete_entry(file, remove_children) }
       end
 
       # Returns the linked data filename in the cache
@@ -127,15 +111,20 @@ module Aspire
       end
 
       # Marks the cache entry as in-progress
+      # @param force [Boolean] if true, do not raise MarkedError when the entry
+      #   is already marked; otherwise, MarkedError is raised when the entry is
+      #   already marked.
       # @return [void]
       # @yield [file] passes the opened status file to the block
       # @yieldparam file [File] the opened status file
       # @raise [Aspire::Caching::Exceptions::MarkError] if the operation failed
       # @raise [Aspire::Caching::Exceptions::MarkedError] if the cache entry is
       #   already marked
-      def mark(&block)
+      def mark(force: false, &block)
         filename = status_file
-        File.open(filename, File::CREAT | File::EXCL, &block)
+        flags = File::CREAT
+        flags |= File::EXCL unless force
+        File.open(filename, flags, &block)
       rescue Errno::EEXIST
         raise MarkedError, "#{url} already marked [#{filename}]"
       rescue SystemCallError => e

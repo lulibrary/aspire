@@ -19,6 +19,11 @@ class CacheBuilderTest < CacheTestBase
     @builder.build(lists, clear: true)
   end
 
+  # def test_resume
+  #   lists = list_enumerator('2016-17', '2015-16')
+  #   @builder.resume(lists)
+  # end
+
   # def test_write
   #   @builder.write_list(@list_url3)
   #   # @builder.write(@list_url2)
@@ -28,7 +33,9 @@ class CacheBuilderTest < CacheTestBase
 
   def list_enumerator(*time_periods)
     filters = [
-      proc { |row| time_periods.include?(row['Time Period']) }
+      proc { |row| time_periods.include?(row['Time Period']) },
+      proc { |row| !row['Status'].to_s.start_with?('Published') },
+      proc { |row| row['Privacy Control'] == 'Public' }
     ]
     Aspire::Enumerator::ListReportEnumerator.new(@list_report, filters)
                                             .enumerator

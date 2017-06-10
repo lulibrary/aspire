@@ -41,15 +41,26 @@ module Aspire
         filename.join
       end
 
-      # Adds a suffix to a filename
+      # Adds a suffix to a filename preserving any file extension
+      # e.g. add_filename_suffix('file.txt', '-suffix') == 'file-suffix.txt'
       # @param filename [String] the filename
       # @param suffix [String] the suffix
       # @return [String] the filename with suffix
       def add_filename_suffix(filename, suffix)
-        filename = filename.rpartition(File.extname(filename))
-        filename[2] = filename[1]
-        filename[1] = suffix
-        filename.join
+        f = filename.split(File::SEPARATOR)
+        # If the filename is '.' or '..' add the suffix to the parent path,
+        # otherwise add it to the basename
+        i = %w[. ..].include?(f[-1]) ? -2 : -1
+        # Split the basename around the file extension and prepend the suffix
+        # to the extension
+        if f[i]
+          file_ext = f[i].rpartition(File.extname(f[i]))
+          file_ext[1] = "#{suffix}#{file_ext[1]}"
+          f[i] = file_ext.join
+        end
+        # Reconstruct the filename, preserving any trailing path separator
+        f.push('') if filename.end_with?(File::SEPARATOR)
+        File.join(f)
       end
 
       # Parses the URL and checks that it is cacheable
@@ -135,14 +146,14 @@ module Aspire
       def rmdir_empty(path, root)
         # The starting path is assumed to be a filename, so we append a dummy
         # filename if it's a directory
-        dir = File.directory?(dir) ? File.join(flags[:file], '.') : dir
+        path = File.directory?(path) ? File.join(path, '.') : path
         loop do
           # Get the parent of the current directory/file
-          dir = File.dirname(dir)
+          path = File.dirname(path)
           # Stop at the end of the directory path or a non-empty directory
-          break if end_of_path?(dir, root) || !Dir.empty?(dir)
+          break if end_of_path?(path, root) || !Dir.empty?(path)
           # Remove the directory
-          Dir.rmdir(dir)
+          Dir.rmdir(path)
         end
       rescue Errno::ENOTEMPTY, Errno::ENOTDIR
         # Stop without error if the directory is not empty or not a directory
@@ -156,6 +167,42 @@ module Aspire
       # @return [String] the file path with any extension removed
       def strip_ext(path)
         path.rpartition(File.extname(path))[0]
+      end
+
+      # Removes a prefix from a filename
+      # @param filename [String] the filename
+      # @param prefix [String] the prefix
+      # @return [String] the filename without prefix
+      def strip_filename_prefix(filename, prefix)
+        f = filename.rpartition(File.basename(filename))
+        f[1] = strip_prefix(f[1], prefix)
+        f.join
+      end
+
+      # Removes a suffix from a filename
+      # @param filename [String] the filename
+      # @param suffix [String] the suffix
+      # @return [String] the filename without suffix
+      def strip_filename_suffix(filename, suffix)
+        f = filename.rpartition(File.extname(filename))
+        f[0] = strip_suffix(f[0], suffix)
+        f.join
+      end
+
+      # Removes a prefix from a string
+      # @param str [String] the string to remove the prefix from
+      # @param prefix [String] the prefix to remove
+      # @return [String] the string with the prefix removed
+      def strip_prefix(str, prefix)
+        str.start_with?(prefix) ? str.slice(prefix.length..-1) : str
+      end
+
+      # Removes a suffix from a string
+      # @param str [String] the string to remove the suffix from
+      # @param suffix [String] the suffix to remove
+      # @return [String] the string with the suffix removed
+      def strip_suffix(str, suffix)
+        str.end_with?(suffix) ? str.slice(0...-suffix.length) : str
       end
     end
   end

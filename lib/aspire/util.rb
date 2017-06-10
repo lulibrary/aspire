@@ -10,7 +10,7 @@ module Aspire
                             '(?<child_type>[^/.]*)' \
                             '(/(?<child_id>[^/\.]*))?' \
                             '(\.(?<child_format>[^/]*))?' \
-                            ')?').freeze
+                            ')?(?<rest>.*)').freeze
 
     # Returns true if the first URL is the child of the second URL
     # @param url1 [Aspire::Caching::CacheEntry, String] the first URL
@@ -55,15 +55,19 @@ module Aspire
     # @param url1 [Aspire::Caching::CacheEntry, String] the first URL
     # @param url2 [Aspire::Caching::CacheEntry, String] the second URL
     # @param api [Aspire::API::LinkedData] the API for generating canonical URLs
+    # @param strict [Boolean] if true, the first URL must be a parent of the
+    #   second URL, otherwise the first URL must be a parent or the same as the
+    #   second.
     # @return [Boolean] true if the URL has the same parent as this entry
     def parent_url?(url1, url2, api = nil, strict: false)
       u1 = url_for_comparison(url1, api, parsed: true)
       u2 = url_for_comparison(url2, api, parsed: true)
-      same_parent = u1[:type] == u2[:type] && u1[:id] == u2[:id]
+      # Both URLs must have the same parent
+      return false unless u1[:type] == u2[:type] && u1[:id] == u2[:id]
       # Non-strict comparison requires only the same parent object
-      return same_parent unless strict
+      return true unless strict
       # Strict comparison requires that this entry is a child of the URL
-      same_parent && u1[:child_type].nil? && !u2[:child_type].nil?
+      u1[:child_type].nil? && !u2[:child_type].nil? ? true : false
     end
 
     # Returns the components of an object URL
