@@ -169,13 +169,14 @@ module Aspire
       #   if it is from the linked data API
       # @return [Hash] the parsed JSON data from the cache or API
       # @raise [Aspire::Cache::Exceptions::]
-      def read(url = nil, entry: nil, json: false, use_cache: true)
+      def read(url = nil,
+               entry: nil, json: false, use_api: true, use_cache: true)
         entry ||= cache_entry(url)
         # Try the cache, data is nil on a cache miss
         data = use_cache ? read_cache(entry, json: json) : nil
         from_cache = !data.nil?
         # Try the API if nothing was returned from the cache
-        data ||= write(entry: entry, json: json)
+        data ||= write(entry: entry, json: json) if use_api
         # Call the block if the read was successful
         yield(data, entry, from_cache, json) if block_given? && data
         # Return the data

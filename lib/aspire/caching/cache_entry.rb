@@ -14,6 +14,7 @@ module Aspire
       #   @return [Aspire::Caching::Cache] the cache
       attr_accessor :cache
 
+      # :!attribute [rw] draft
       # @!attribute [rw] json_api_opt
       #   @return [Hash] #call parameters for the JSON API call
       attr_accessor :json_api_opt

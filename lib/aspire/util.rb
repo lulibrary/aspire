@@ -41,6 +41,22 @@ module Aspire
       parsed[:id]
     end
 
+    def list?(uri)
+      uri.include?('/lists/')
+    end
+
+    def module?(uri)
+      uri.include?('/modules/')
+    end
+
+    def resource?(uri)
+      uri.include?('/resources/')
+    end
+
+    def section?(uri)
+      uri.include?('/sections/')
+    end
+    
     # Returns true if a URL is a list URL, false otherwise
     # @param u [String] the URL of the API object
     # @return [Boolean] true if the URL is a list URL, false otherwise
