@@ -5,16 +5,15 @@ require 'uri'
 
 require 'aspire/caching/cache_entry'
 require 'aspire/caching/cache_logger'
-require 'aspire/caching/enumerator'
-require 'aspire/caching/exceptions'
 require 'aspire/caching/util'
+require 'aspire/exceptions'
 
 module Aspire
   # Tools for building a cache from the Aspire APIs
   module Caching
     # Caches Aspire API objects and their references
     class Builder
-      include Exceptions
+      include Aspire::Exceptions
       include Util
 
       # @!attribute [rw] cache
@@ -29,7 +28,7 @@ module Aspire
       end
 
       # Builds a cache of Aspire lists from the Aspire All Lists report
-      # @param enumerator [Aspire::Enumerator::ListReportEnumerator] the Aspire
+      # @param enumerator [Aspire::Enumerator::ReportEnumerator] the Aspire
       #   All Lists report enumerator
       # @param clear [Boolean] if true, clear the cache before building
       # @return [Integer] the number of lists cached
@@ -51,7 +50,7 @@ module Aspire
       end
 
       # Resumes an interrupted build
-      # @param enumerator [Aspire::Enumerator::ListReportEnumerator] the Aspire
+      # @param enumerator [Aspire::Enumerator::ReportEnumerator] the Aspire
       #   All Lists report enumerator
       def resume(enumerator)
         # Log activity

@@ -1,4 +1,4 @@
-require 'aspire/enumerator/list_report_enumerator'
+require 'aspire/enumerator/report_enumerator'
 
 require_relative 'test_helper'
 
@@ -45,6 +45,6 @@ class ListReportEnumeratorTest < Test
   private
 
   def enum(file, filters)
-    Aspire::Enumerator::ListReportEnumerator.new(file, filters).enumerator
+    Aspire::Enumerator::ReportEnumerator.new(file, filters).enumerator
   end
 end

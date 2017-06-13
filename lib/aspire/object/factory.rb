@@ -23,7 +23,7 @@ module Aspire
       # @param users [Hash<String, Aspire::Object::User>] a hash of user
       #   profiles indexed by URI
       # @return [void]
-      def initialize(cache, users: nil)
+      def initialize(cache, users = nil)
         self.cache = cache
         self.users = users || {}
       end
@@ -37,20 +37,43 @@ module Aspire
       # @return [Aspire::Object::ListBase] the list object
       def get(uri = nil, parent = nil, json: nil, ld: nil)
         return nil if uri.nil? || uri.empty?
+        get_exceptions(uri, parent, json: json, ld: ld) ||
+          get_linked_data(uri, parent, json: json, ld: ld)
+      end
+
+      private
+
+      # Returns a new object from sources other than the linked data API
+      # @param uri [String] the URI of the object
+      # @param parent [Aspire::Object::ListBase] this object's parent object
+      # @param json [Hash] the parsed JSON API data for the object
+      # @param ld [Hash] the parsed linked data API data for the object
+      # @return [Aspire::Object::ListBase, nil] the list object or nil if not
+      #   available
+      def get_exceptions(uri = nil, parent = nil, json: nil, ld: nil)
         # Get item data from the parent list's JSON API data
-        return ListItem.new(uri, self, parent) if uri.include?('/items/')
+        return ListItem.new(uri, self, parent) if item?(uri)
         # Get resource data from the JSON API
-        if uri.include?('/resources/') && !json.nil?
+        if resource?(uri) && !json.nil?
           return Resource.new(uri, self, json: json, ld: ld)
         end
         # Get user data from the users lookup table
-        return users[uri] if uri.include?('/users/')
-        # Get lists, modules, resources and sections from the Linked Data API
-        get_linked_data(uri, parent, json: json, ld: ld)
+        # - normalise the URI to the form used by the linked data API
+        return users[cache.linked_data_url(uri), self] if user?(uri)
+        # Otherwise no exceptions
+        nil
       end
 
+      # Returns a new object from the linked data API
+      # @param uri [String] the URI of the object
+      # @param parent [Aspire::Object::ListBase] this object's parent object
+      # @param json [Hash] the parsed JSON API data for the object
+      # @param ld [Hash] the parsed linked data API data for the object
+      # @return [Aspire::Object::ListBase, nil] the list object or nil if not
+      #   available
       def get_linked_data(uri, parent = nil, json: nil, ld: nil)
-        ld ||= cache.read(uri)
+        # Call #linked_data to determine whether uri is present in ld
+        ld = linked_data(uri, ld) || cache.read(uri)
         return List.new(uri, self, parent, json: json, ld: ld) if list?(uri)
         return Module.new(uri, self, json: json, ld: ld) if module?(uri)
         return Resource.new(uri, self, json: json, ld: ld) if resource?(uri)

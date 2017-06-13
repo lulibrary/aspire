@@ -1,23 +1,7 @@
 require 'aspire/object/base'
+require 'aspire/properties'
 
 module Aspire
-  # Property name URIs
-  module Properties
-    CREATED = 'http://purl.org/vocab/resourcelist/schema#created'.freeze
-    DESCRIPTION = 'http://purl.org/vocab/resourcelist/schema#description'
-                  .freeze
-    HAS_CREATOR = 'http://rdfs.org/sioc/spec/has_creator'.freeze
-    HAS_OWNER = 'http://purl.org/vocab/resourcelist/schema#hasOwner'.freeze
-    LAST_PUBLISHED = 'http://purl.org/vocab/resourcelist/schema#lastPublished'
-                     .freeze
-    LAST_UPDATED = 'http://purl.org/vocab/resourcelist/schema#lastUpdated'
-                   .freeze
-    NAME = 'http://rdfs.org/sioc/spec/name'.freeze
-    PUBLISHED_BY = 'http://purl.org/vocab/resourcelist/schema#publishedBy'
-                   .freeze
-    USED_BY = 'http://purl.org/vocab/resourcelist/schema#usedBy'.freeze
-  end
-
   module Object
     # The abstract base class of reading list objects (items, lists, sections)
     class ListBase < Aspire::Object::Base
@@ -38,17 +22,17 @@ module Aspire
 
       # Initialises a new ListBase instance
       # @param uri [String] the reading list object URI (item/list/section)
-      # @param factory [Aspire::Object::Factory]
-      #   a factory returning ListBase subclass instances
-      # @param parent [Aspire::Object::ListBase]
-      #   the parent reading list object of this object
+      # @param factory [Aspire::Object::Factory] a factory returning ListBase
+      #   subclass instances
+      # @param parent [Aspire::Object::ListBase] the parent reading list object
+      #   of this object
       # @param json [Hash] the parsed JSON data from the Aspire JSON API
       # @param ld [Hash] the parsed JSON data from the Aspire linked data API
       # @return [void]
       def initialize(uri, factory, parent = nil, json: nil, ld: nil)
         super(uri, factory)
         self.parent = parent
-        self.entries = get_entries(json: json, ld: ld)
+        self.entries = get_entries(ld: ld)
       end
 
       # Iterates over the child reading list objects in display order
@@ -95,20 +79,19 @@ module Aspire
       end
 
       # Returns a list of child reading list objects in display order
-      # @param json [Hash] the parsed JSON data from the Aspire JSON API
       # @param ld [Hash] the parsed JSON data from the Aspire linked data API
       # @return [Array<Aspire::Object::ListBase>] the ordered list of child
       #   objects
-      def get_entries(json: nil, ld: nil)
+      def get_entries(ld: nil)
         entries = []
-        data = ld ? ld[uri] : nil
+        data = linked_data(uri, ld)
         return entries unless data
-        data.each { |key, value| get_ordered_entry(key, value, entries) }
+        data.each { |key, value| get_ordered_entry(key, value, entries, ld) }
         entries
       end
 
       # Returns the child items of this object in display order
-      # @return [Array<Aspire::Object::ListItem>] the child reading list items
+      # @return [Array<Aspire::Object::ListItem>] the child list items
       def items
         result = []
         each_item { |item| result.push(item) }
@@ -212,8 +195,9 @@ module Aspire
       # @param value [Hash] the property value hash
       # @param entries [Array<Aspire::Object::ListBase>] the ordered list of
       #   child objects
+      # @param ld [Hash] the parsed JSON data from the Aspire linked data API
       # @return [Aspire::Object::ListBase] the list object
-      def get_ordered_entry(key, value, entries)
+      def get_ordered_entry(key, value, entries, ld)
         prefix, index = key.split('_')
         return nil unless prefix == KEY_PREFIX
         uri = value[0]['value']
@@ -223,7 +207,7 @@ module Aspire
 
     # Represents a reading list in the Aspire API
     class List < ListBase
-      include Properties
+      include Aspire::Properties
 
       # @!attribute [rw] created
       #   @return [DateTime] the creation timestamp of the list
@@ -250,10 +234,6 @@ module Aspire
       #   @return [DateTime] the timestamp of the most recent list update
       attr_accessor :last_updated
 
-      # @!attribute [rw] list_history
-      #   @return [Hash] the parsed data from the Aspire list history JSON API
-      attr_accessor :list_history
-
       # @!attribute [rw] modules
       #   @return [Array<Aspire::Object::Module>] the modules referencing this
       #     list
@@ -275,20 +255,13 @@ module Aspire
       #   @return [Aspire::Object::TimePeriod] the period covered by the list
       attr_accessor :time_period
 
-      # @!attribute [rw] uri
-      #   @return [String] the URI of the reading list
-      attr_accessor :uri
-
       # Initialises a new List instance
-      # @param uri [String] the reading list object URI (item/list/section)
-      # @param factory [Aspire::Object::Factory] a factory
-      #   returning ReadingListBase subclass instances
-      # @param parent [Aspire::Object::ListBase] the parent
-      #   reading list object of this object
-      # @param json [Hash] the data containing the properties of the
-      #   ListBase instance from the Aspire JSON API
-      # @param ld [Hash] the data containing the properties of the
-      #   ListBase instance from the Aspire linked data API
+      # @param uri [String] the URI of the object
+      # @param factory [Aspire::Object::Factory] a factory returning ListBase
+      #   subclass instances
+      # @param parent [Aspire::Object::ListBase] this object's parent object
+      # @param json [Hash] the parsed JSON data from the Aspire JSON API
+      # @param ld [Hash] the parsed JSON data from the Aspire linked data API
       # @return [void]
       def initialize(uri, factory, parent = nil, json: nil, ld: nil)
         # Set properties from the Reading Lists JSON API
@@ -296,13 +269,13 @@ module Aspire
         #   details are available
         init_json_data(uri, factory, json)
         # Initialise the superclass
-        super(uri, factory)
+        super(uri, factory, parent, json: json, ld: ld)
         # Set properties from the linked data API data
-        init_linked_data(uri, factory, ld)
+        init_linked_data(ld)
       end
 
       # Returns the number of items in the list
-      # @see (LegantoSync::ReadingLists::Aspire::ListObject#length)
+      # @see (Aspire::Object::ListBase#length)
       def length(item_type = nil)
         item_type ||= :item
         # The item length of a list is the length of the items property,
@@ -319,27 +292,27 @@ module Aspire
       private
 
       # Retrieves the list details and history from the Aspire JSON API
-      # @param uri [String] the reading list object URI (item/list/section)
-      # @param factory [LegantoSync::ReadingLists::Aspire::Factory] a factory
-      #   returning ReadingListBase subclass instances
-      # @param json [Hash] the data containing the properties of the reading
-      #   list object from the Aspire JSON API
+      # @param uri [String] the URI of the object
+      # @param factory [Aspire::Object::Factory] a factory returning ListBase
+      #   subclass instances
+      # @param json [Hash] the parsed JSON data from the Aspire JSON API
       # @return [void]
       def init_json_data(uri, factory, json = nil)
-        self.api = factory.api
         init_json_defaults
         # Get the list details
-        json ||= init_data_list
+        json ||= factory.cache.read(uri, json: true)
         if json
           self.name = json['name']
           init_json_items(json['items'])
-          init_json_modules(json['modules'])
-          init_json_time_period(json['timePeriod'])
+          init_json_modules(json['modules'], factory)
+          init_json_time_period(json['timePeriod'], factory)
         end
         # Return the parsed JSON data from the Aspire list details JSON API
         json
       end
 
+      # Sets the property defaults for JSON API fields
+      # @return [void]
       def init_json_defaults
         # Default values
         self.modules = nil
@@ -347,29 +320,32 @@ module Aspire
         self.time_period = nil
       end
 
-      def init_json_items(json)
+      # Builds a mapping from item URI to JSON data for items from the JSON API
+      # @param items [Array<Hash>] the parsed JSON data for the items array
+      # @return [void]
+      def init_json_items(items)
         # A hash mapping item URI to item
         self.items = {}
-        return unless json
-        json['items'].each { |item| items[item['uri']] = item }
+        return unless items
+        items.each { |item| self.items[item['uri']] = item }
       end
 
-      def init_json_list_details(uri)
-        list_id = id_from_uri(uri)
-        options = { bookjacket: 1, draft: 1, editions: 1, history: 0 }
-        json = api.call("lists/#{list_id}", **options)
-        # Get the list history
-        self.list_history = api.call("lists/#{list_id}/history")
-        # Return the list details
-        json
-      end
-
-      def init_json_modules(mods)
+      # Builds a list of Module instances for modules from the JSON API
+      # @param mods [Array<Hash>] the parsed JSON data for the modules array
+      # @param factory [Aspire::Object::Factory] a factory returning ListBase
+      #   subclass instances
+      # @return [void]
+      def init_json_modules(mods, factory)
         return unless mods
         self.modules = mods.map { |m| Module.new(m['uri'], factory, json: m) }
       end
 
-      def init_json_time_period(period)
+      # Sets the time period for the list from the JSON API
+      # @param period [Array<Hash>] the parsed JSON data for the time period
+      # @param factory [Aspire::Object::Factory] a factory returning ListBase
+      #   subclass instances
+      # @return [void]
+      def init_json_time_period(period, factory)
         self.time_period = if period
                              TimePeriod.new(period['uri'], factory,
                                             json: period)
@@ -378,8 +354,8 @@ module Aspire
 
       # Sets reading list properties from the Aspire linked data API
       # @return [void]
-      def init_linked_data(uri, factory, ld = nil)
-        list_data = ld[self.uri]
+      def init_linked_data(ld = nil)
+        list_data = linked_data(uri, ld)
         init_linked_data_creator(list_data, ld)
         init_linked_data_modules(list_data, ld)
         init_linked_data_owner(list_data, ld)
@@ -391,22 +367,42 @@ module Aspire
         self.name = get_property(NAME, list_data) unless name
       end
 
+      # Sets the reading list creator
+      # @param list_data [Hash] the parsed JSON data for the list from the
+      #   Aspire linked data API
+      # @param ld [Hash] the parsed JSON data from the Aspire linked data API
+      # @return [void]
       def init_linked_data_creator(list_data, ld)
         has_creator = get_property(HAS_CREATOR, list_data, single: false) || []
         self.creator = has_creator.map { |u| factory.get(u, ld: ld) }
       end
 
+      # Sets the list modules
+      # @param list_data [Hash] the parsed JSON data for the list from the
+      #   Aspire linked data API
+      # @param ld [Hash] the parsed JSON data from the Aspire linked data API
+      # @return [void]
       def init_linked_data_modules(list_data, ld)
         return unless modules.nil?
-        mods = get_property(USED_BY, list_data, single: false)
+        mods = get_property(USED_BY, list_data, single: false) || []
         self.modules = mods.map { |u| factory.get(u, ld: ld) } if mods
       end
 
+      # Sets the list owner
+      # @param list_data [Hash] the parsed JSON data for the list from the
+      #   Aspire linked data API
+      # @param ld [Hash] the parsed JSON data from the Aspire linked data API
+      # @return [void]
       def init_linked_data_owner(list_data, ld)
         has_owner = get_property(HAS_OWNER, list_data, single: false) || []
         self.owner = has_owner.map { |u| factory.get(u, ld: ld) }
       end
 
+      # Sets the list publisher
+      # @param list_data [Hash] the parsed JSON data for the list from the
+      #   Aspire linked data API
+      # @param ld [Hash] the parsed JSON data from the Aspire linked data API
+      # @return [void]
       def init_linked_data_publisher(list_data, ld)
         published_by = get_property(PUBLISHED_BY, list_data)
         self.publisher = factory.get(published_by, ld: ld)
@@ -416,7 +412,7 @@ module Aspire
     # Represents a reading list item (citation) in the Aspire API
     class ListItem < ListBase
       # @!attribute [rw] digitisation
-      #   @return [LegantoSync::ReadingLists::Aspire::Digitisation]
+      #   @return [Aspire::Object::Digitisation]
       #     the digitisation details for the item
       attr_accessor :digitisation
 
@@ -438,7 +434,7 @@ module Aspire
       attr_accessor :note
 
       # @!attribute [rw] resource
-      #   @return [LegantoSync::ReadingLists::Aspire::Resource] the resource for
+      #   @return [Aspire::Object::Resource] the resource for
       #     the item
       attr_accessor :resource
 
@@ -452,14 +448,12 @@ module Aspire
 
       # Initialises a new ListItem instance
       # @param uri [String] the reading list object URI (item/list/section)
-      # @param factory [LegantoSync::ReadingLists::Aspire::Factory]
+      # @param factory [Aspire::Object::Factory]
       #   a factory returning ReadingListBase subclass instances
-      # @param parent [LegantoSync::ReadingLists::Aspire::ListObject]
+      # @param parent [Aspire::Object::ListBase]
       #   the parent reading list object of this object
-      # @param json [Hash] the parsed JSON data hash containing the properties
-      #   of the ReadingListBase instance from the Aspire JSON API
-      # @param ld [Hash] the parsed JSON data hash containing the properties of
-      #   the ReadingListBase instance from the Aspire linked data API
+      # @param json [Hash] the parsed JSON data from the Aspire JSON API
+      # @param ld [Hash] the parsed JSON data from the Aspire linked data API
       # @return [void]
       def initialize(uri, factory, parent = nil, json: nil, ld: nil)
         super(uri, factory, parent, json: json, ld: ld)
@@ -498,14 +492,10 @@ module Aspire
       #   :uri = the list item URI
       # @return [String] the resource title or alternative
       def title(alt = nil)
-        # Return the resource title if available, otherwise return the specified
-        #   alternative
+        # Return the resource title if available
         return resource.title || @title if resource
-        return library_note if alt == :library_note || alt == :private_note
-        return public_note || library_note if alt == :note
-        return public_note if alt == :public_note || alt == :student_note
-        return uri if alt == :uri
-        nil
+        # Otherwise return the specified alternative
+        title_alt(alt)
       end
 
       # Returns a string representation of the ListItem instance (the citation
@@ -549,11 +539,22 @@ module Aspire
         # resource_uri = get_property('http://purl.org/vocab/resourcelist/schema#resource', item_ld)
         # resource = resource_json # || resource_uri ? factory.get(resource_uri, json: resource_json, ld: ld) : nil
       end
+
+      # Returns the alternative resource title
+      # @param (see #title)
+      # @return [String] the alternative to the resource title
+      def title_alt(alt)
+        return library_note if %w[library_note private_note].include?(alt)
+        return public_note || library_note if alt == :note
+        return public_note if %w[public_note student_note].include?(alt)
+        return uri if alt == :uri
+        nil
+      end
     end
 
     # Represents a reading list section in the Aspire API
     class ListSection < ListBase
-      include Properties
+      include Aspire::Properties
 
       # @!attribute [rw] description
       #   @return [String] the reading list section description
@@ -564,19 +565,16 @@ module Aspire
       attr_accessor :name
 
       # Initialises a new ListSection instance
-      # @param uri [String] the reading list object URI (item/list/section)
-      # @param factory [LegantoSync::ReadingLists::Aspire::Factory]
-      #   a factory returning ReadingListBase subclass instances
-      # @param parent [LegantoSync::ReadingLists::Aspire::ListObject]
-      #   the parent reading list object of this object
-      # @param json [Hash] the parsed JSON data hash containing the properties
-      #   of the ReadingListBase instance from the Aspire JSON API
-      # @param ld [Hash] the parsed JSON data hash containing the properties of
-      #   the ReadingListBase instance from the Aspire linked data API
+      # @param uri [String] the URI of the object
+      # @param factory [Aspire::Object::Factory] a factory returning ListBase
+      #   subclass instances
+      # @param parent [Aspire::Object::ListBase] this object's parent object
+      # @param json [Hash] the parsed JSON data from the Aspire JSON API
+      # @param ld [Hash] the parsed JSON data from the Aspire linked data API
       # @return [void]
       def initialize(uri, factory, parent = nil, json: nil, ld: nil)
         super(uri, factory, parent, json: json, ld: ld)
-        section_ld = ld[uri]
+        section_ld = linked_data(uri, ld)
         self.description = get_property(DESCRIPTION, section_ld)
         self.name = get_property(NAME, section_ld)
       end

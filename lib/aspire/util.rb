@@ -41,22 +41,45 @@ module Aspire
       parsed[:id]
     end
 
+    # Returns true if URI is a list item
+    # @param uri [String] the URI
+    # @return [Boolean] true if the URI is a list item, otherwise false
+    def item?(uri)
+      uri.include?('/items/')
+    end
+
+    # Returns the data for a URI from a parsed linked data API response
+    # which may contain multiple objects
+    # @param uri [String] the URI of the object
+    # @param ld [Hash] the parsed JSON data from the Aspire linked data API
+    # @return [Hash] the parsed JSON data for the URI
+    def linked_data(uri, ld)
+      uri = linked_data_path(uri)
+      return nil unless uri && ld
+      # The URI used to retrieve the data may be the canonical URI or a
+      # tenancy aliases. We ignore the host part of the URIs and match just
+      # the path
+      ld.each { |u, data| return data if uri == linked_data_path(u) }
+      # No match was found
+      nil
+    end
+
+    # Returns the path of a URI
+    # @param uri [String] the URI
+    # @return [String, nil] the URI path or nil if invalid
+    def linked_data_path(uri)
+      URI.parse(uri).path
+    rescue URI::InvalidComponentError, URI::InvalidURIError
+      nil
+    end
+
+    # Returns true if URI is a list
+    # @param uri [String] the URI
+    # @return [Boolean] true if the URI is a list, otherwise false
     def list?(uri)
       uri.include?('/lists/')
     end
 
-    def module?(uri)
-      uri.include?('/modules/')
-    end
-
-    def resource?(uri)
-      uri.include?('/resources/')
-    end
-
-    def section?(uri)
-      uri.include?('/sections/')
-    end
-    
     # Returns true if a URL is a list URL, false otherwise
     # @param u [String] the URL of the API object
     # @return [Boolean] true if the URL is a list URL, false otherwise
@@ -65,6 +88,13 @@ module Aspire
       parsed ||= parse_url(u)
       child_type = parsed[:child_type]
       parsed[:type] == 'lists' && (child_type.nil? || child_type.empty?)
+    end
+
+    # Returns true if URI is a module
+    # @param uri [String] the URI
+    # @return [Boolean] true if the URI is a module, otherwise false
+    def module?(uri)
+      uri.include?('/modules/')
     end
 
     # Returns true if the first URL is the parent of the second URL
@@ -100,6 +130,20 @@ module Aspire
       url ? LD_API_URI.match(url) : nil
     end
 
+    # Returns true if URI is a resource
+    # @param uri [String] the URI
+    # @return [Boolean] true if the URI is a resource, otherwise false
+    def resource?(uri)
+      uri.include?('/resources/')
+    end
+
+    # Returns true if URI is a section
+    # @param uri [String] the URI
+    # @return [Boolean] true if the URI is a section, otherwise false
+    def section?(uri)
+      uri.include?('/sections/')
+    end
+
     # Returns a parsed or unparsed URL for comparison
     # @param url [Aspire::Caching::CacheEntry, String] the URL
     # @param api [Aspire::API::LinkedData] the API for generating canonical URLs
@@ -129,6 +173,13 @@ module Aspire
     rescue URI::InvalidComponentError, URI::InvalidURIError
       # Return nil if the URL is invalid
       nil
+    end
+
+    # Returns true if URI is a section
+    # @param uri [String] the URI
+    # @return [Boolean] true if the URI is a section, otherwise false
+    def user?(uri)
+      uri.include?('/users/')
     end
   end
 end

@@ -1,13 +1,13 @@
-require 'aspire/caching/exceptions'
 require 'aspire/caching/util'
+require 'aspire/exceptions'
 require 'aspire/util'
 
 module Aspire
   module Caching
     # Represents an entry in the cache
     class CacheEntry
-      include Aspire::Caching::Exceptions
       include Aspire::Caching::Util
+      include Aspire::Exceptions
       include Aspire::Util
 
       # @!attribute [rw] cache
@@ -35,7 +35,7 @@ module Aspire
       # @param url [String] the URL of the API object
       # @param cache [Aspire::Caching::Cache] the parent cache
       # @return [void]
-      # @raise [Aspire::Caching::Exceptions::NotCacheable] if the URL is not
+      # @raise [Aspire::Exceptions::NotCacheable] if the URL is not
       #   cacheable
       def initialize(url, cache)
         self.cache = cache
@@ -71,7 +71,7 @@ module Aspire
       # @param remove_children [Boolean] if true, remove children of the object
       #   as well as the object, otherwise remove just the object
       # @return [void]
-      # @raise [Aspire::Caching::Exceptions::MarkedError] if the entry is
+      # @raise [Aspire::Exceptions::MarkedError] if the entry is
       #   marked in-progress and force = false
       def delete(force: false, remove_children: false)
         mark(force: force) { |_f| delete_entry(file, remove_children) }
@@ -118,8 +118,8 @@ module Aspire
       # @return [void]
       # @yield [file] passes the opened status file to the block
       # @yieldparam file [File] the opened status file
-      # @raise [Aspire::Caching::Exceptions::MarkError] if the operation failed
-      # @raise [Aspire::Caching::Exceptions::MarkedError] if the cache entry is
+      # @raise [Aspire::Exceptions::MarkError] if the operation failed
+      # @raise [Aspire::Exceptions::MarkedError] if the cache entry is
       #   already marked
       def mark(force: false, &block)
         filename = status_file
@@ -163,8 +163,8 @@ module Aspire
       #   return a JSON string
       # @return [Array, Hash, String, nil] the parsed JSON data or JSON string,
       #   or nil if JSON API data is requested but not available for this entry
-      # @raise [Aspire::Caching::CacheMiss] when the data is not in the cache
-      # @raise [Aspire::Caching::ReadError] when the read operation fails
+      # @raise [Aspire::Exceptions::CacheMiss] when the data is not in the cache
+      # @raise [Aspire::Exceptions::ReadError] when the read operation fails
       def read(json = false, parsed: false)
         filename = json ? json_file : file
         return nil if filename.nil? || filename.empty?
@@ -210,7 +210,7 @@ module Aspire
       # Sets the URL and associated flags
       # @param u [String] the URL of the API object
       # @return [void]
-      # @raise [Aspire::Caching::Exceptions::NotCacheable] if the URL is not
+      # @raise [Aspire::Exceptions::NotCacheable] if the URL is not
       #   cacheable
       def url=(u)
         # Convert the URL to canonical form for comparison
@@ -232,7 +232,7 @@ module Aspire
       # @param parsed [Boolean] if true, treat data as a parsed JSON data
       #   structure, otherwise treat it as a JSON string
       # @return [void]
-      # @raise [Aspire::Caching::WriteError] when the write operation fails
+      # @raise [Aspire::Exceptions::WriteError] when the write operation fails
       def write(data, json = false, parsed: false)
         filename = json ? json_file : file
         return if filename.nil? || filename.empty?
@@ -252,7 +252,7 @@ module Aspire
       # Deletes children of the cache entry
       # @param filename [String] the linked data API filename
       # @return [nil]
-      # @raise [Aspire::Caching::Exceptions::RemoveError] if the operation fails
+      # @raise [Aspire::Exceptions::RemoveError] if the operation fails
       def delete_children(filename)
         # Child objects of the cache entry are stored in a directory with the
         # same name as the linked data cache file without the '.json' extension
@@ -281,7 +281,7 @@ module Aspire
       # Deletes the specified file
       # @param filename [String] the filename to delete
       # @return [void]
-      # @raise [Aspire::Caching::Exceptions::RemoveError] if the delete fails
+      # @raise [Aspire::Exceptions::RemoveError] if the delete fails
       #   for any reason other than the file not existing
       def delete_file(filename)
         File.delete(filename) unless filename.nil? || filename.empty?

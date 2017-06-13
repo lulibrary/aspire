@@ -8,11 +8,11 @@ module Aspire
   module Object
     # The base class for Aspire API objects
     class Base
+      include Aspire::Util
+
       # Aspire properties containing HTML markup will have the markup stripped
       #   if STRIP_HTML = true"#{without format suffix (.html, .json etc.)}"
       STRIP_HTML = true
-
-      include Aspire::Util
 
       # @!attribute [rw] factory
       #   @return [Aspire::Object::Factory] the factory for creating
@@ -23,14 +23,15 @@ module Aspire
       #   @return [String] the URI of the object
       attr_accessor :uri
 
-      # Initialises a new APIObject instance
+      # Initialises a new Aspire::Object instance
       # @param uri [String] the URI of the object
       # @param factory [Aspire::Object::Factory] the factory for creating
       #   Aspire::Object instances
       # @return [void]
       def initialize(uri, factory)
         self.factory = factory
-        self.uri = uri
+        # Normalise the URL to the linked data form
+        self.uri = factory ? factory.cache.linked_data_url(uri) : uri
       end
 
       # Returns a Boolean property value
@@ -88,6 +89,15 @@ module Aspire
       # @return [String] the string representation of the APIObject instance
       def to_s
         uri.to_s
+      end
+
+      # Sets the URI of the object
+      # @param u [String] the URI of the object
+      # @return [void]
+      def uri=(u)
+        # Remove any format extension (.json, .rdf etc.)
+        ext = File.extname(u)
+        @uri = ext.nil? || ext.empty? ? u : u.rpartition(ext)[0]
       end
 
       protected

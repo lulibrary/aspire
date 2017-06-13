@@ -9,6 +9,10 @@ module Aspire
       # The tenancy domain
       TENANCY_DOMAIN = 'myreadinglists.org'.freeze
 
+      # @!attribute [rw] linked_data_root
+      #   @return [URI] the root URI of linked data URIs
+      attr_accessor :linked_data_root
+
       # @!attribute [rw] tenancy_host_aliases
       #   @return [Array<String>] the list of non-canonical tenancy host names
       attr_accessor :tenancy_host_aliases
@@ -18,8 +22,18 @@ module Aspire
       attr_accessor :tenancy_root
 
       # Initialises a new LinkedData instance
+      # @param tenancy_code [String] the Aspire tenancy code
+      # @param opts [Hash] the options hash
+      # @option opts [String] :linked_data_root the root URI of linked data URIs
+      #   usually 'http://<tenancy-code>.myreadinglists.org'
+      # @option opts [Array<String>] :tenancy_host_aliases the list of host
+      #   name aliases for the tenancy
+      # @option opts [String] :tenancy_root the canonical root URI of the
+      #   tenancy, usually 'http://<tenancy-code>.rl.talis.com'
+      # @return [void]
       def initialize(tenancy_code, **opts)
         super(tenancy_code, **opts)
+        self.linked_data_root = opts[:linked_data_root]
         self.tenancy_host_aliases = opts[:tenancy_host_aliases]
         self.tenancy_root = opts[:tenancy_root]
       end
@@ -59,23 +73,38 @@ module Aspire
       # @return [String, nil] the equivalent canonical host name or URL using
       #   the tenancy base URL, or nil if the host is not a valid tenancy alias
       def canonical_url(url)
-        # Ensure the host name is valid
-        url = uri(url)
-        return nil unless valid_host?(url)
-        # Replace the host name with the canonical host name
-        url.host = tenancy_host
-        # Add '.json' suffix if required
-        url.path = "#{url.path}.json" unless url.path.end_with?('.json')
-        # Return the URL string
-        url.to_s
-      rescue URI::InvalidComponentError, URI::InvalidURIError
-        return nil
+        # Set the canonical host name and add the default format extension if
+        # required
+        rewrite_url(url, tenancy_host)
+      end
+
+      # Returns the linked data URI host name
+      # @return [String] the linked data URI host name
+      def linked_data_host
+        linked_data_root.host
+      end
+
+      # Sets the linked data root URL
+      # @param url [String] the linked data root URL
+      # @return [URI] the linked data root URI instance
+      # @raise [URI::InvalidComponentError] if the URL is invalid
+      # @raise [URI::InvalidURIError] if the URL is invalid
+      def linked_data_root=(url)
+        @linked_data_root = parse_url(url)
+      end
+
+      # Converts an Aspire URL to the form used in linked data APIs
+      # @param url [String] an Aspire URL
+      # @return [String, nil] the equivalent linked data URL
+      def linked_data_url(url)
+        # Set the linked data URI host name and remove any format extension
+        rewrite_url(url, linked_data_host, '')
       end
 
       # Returns the canonical tenancy host name
       # @return [String] the canonical tenancy host name
       def tenancy_host
-        @tenancy_root.host
+        tenancy_root.host
       end
 
       # Sets the list of tenancy aliases
@@ -97,21 +126,10 @@ module Aspire
       # Sets the tenancy root URL
       # @param url [String] the tenancy root URL
       # @return [URI] the tenancy root URI instance
-      # @raise [URI::InvalidComponentError, URI::InvalidURIError] if the URL
-      #   is invalid
+      # @raise [URI::InvalidComponentError] if the URL is invalid
+      # @raise [URI::InvalidURIError] if the URL is invalid
       def tenancy_root=(url)
-        # Use the default tenancy host name if no URI is specified
-        url = canonical_host if url.nil? || url.empty?
-        # If the URI contains no path components, uri.host is nil and uri.path
-        # contains the whole string, so use this as the host name
-        uri = URI.parse(url)
-        if uri.host.nil? || uri.host.empty?
-          uri.host = uri.path
-          uri.path = ''
-        end
-        # Set the URI scheme if required
-        uri.scheme ||= SCHEME
-        @tenancy_root = uri
+        @tenancy_root = parse_url(url)
       end
 
       # Returns true if host is a valid tenancy hostname
@@ -130,6 +148,66 @@ module Aspire
         url.nil? ? false : valid_host?(uri(url))
       rescue URI::InvalidComponentError, URI::InvalidURIError
         false
+      end
+
+      private
+
+      # Returns a URI instance for a URL
+      # @param url [String] the URL
+      # @return [URI, nil] the URI instance, or nil if the URL is invalid
+      # @raise [URI::InvalidComponentError] if the URL is invalid
+      # @raise [URI::InvalidURIError] if the URL is invalid
+      def parse_url(url)
+        # Use the default tenancy host name if no URI is specified
+        url = canonical_host if url.nil? || url.empty?
+        # If the URI contains no path components, uri.host is nil and uri.path
+        # contains the whole string, so use this as the host name
+        uri = URI.parse(url)
+        if uri.host.nil? || uri.host.empty?
+          uri.host = uri.path
+          uri.path = ''
+        end
+        # Set the URI scheme if required
+        uri.scheme ||= SCHEME
+        # Return the URI
+        uri
+      end
+
+      # Replaces the host name of a URL
+      # @param url [String] the URL
+      # @param host [String] the new host name
+      # @param format [String] the format suffix - defaults to '.json' if not
+      #   specified, specify an empty string to remove any format
+      # @return [String] the new URL
+      def rewrite_url(url, host, format = nil)
+        # Ensure the host name is valid
+        url = uri(url)
+        return nil unless valid_host?(url)
+        # Replace the host name with the canonical host name
+        url.host = host
+        # Remove any existing format extension
+        url.path = rewrite_url_format(url.path, format)
+        # Return the URL string
+        url.to_s
+      rescue URI::InvalidComponentError, URI::InvalidURIError
+        return nil
+      end
+
+      # Replaces the format extension to the URL
+      # @param url [String] the URL
+      # @param format [String] the new format - defaults '.json' if not given.
+      #   Specify an empty string to remove the existing format
+      # @return [String] the new URL
+      def rewrite_url_format(url, format = nil)
+        # Set the default format
+        format ||= '.json'
+        # Remove the existing format
+        ext = File.extname(url)
+        url = url.rpartition(ext)[0] unless ext.nil? || ext.empty?
+        # Add the new format if not already present
+        url = "#{url}#{format}" unless url.empty? || url.end_with?(format)
+        # Return the URL
+        url
       end
     end
   end

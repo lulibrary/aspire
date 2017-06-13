@@ -1,9 +1,12 @@
 require 'aspire/object/base'
+require 'aspire/properties'
 
 module Aspire
   module Object
     # Represents a module in the Aspire API
     class Module < Base
+      include Aspire::Properties
+
       # @!attribute [rw] code
       #   @return [String] the module code
       attr_accessor :code
@@ -17,10 +20,10 @@ module Aspire
         super(uri, factory)
         self.code =
           get_property('code', json) ||
-          get_property('http://purl.org/vocab/aiiso/schema#code', ld)
+          get_property(AIISO_CODE, ld)
         self.name =
           get_property('name', json) ||
-          get_property('http://putl.org/vocab/aiiso/schema#name', ld)
+          get_property(AIISO_NAME, ld)
       end
 
       # Returns a string representation of the Module instance (the module name)

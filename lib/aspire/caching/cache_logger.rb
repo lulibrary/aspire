@@ -1,6 +1,6 @@
 require 'logger'
 
-require 'aspire/caching/exceptions'
+require 'aspire/exceptions'
 
 module Aspire
   # Tools for building a caching from the Aspire APIs
@@ -46,7 +46,7 @@ module Aspire
       # @raise [Aspire::Caching::Exceptions::Error]
       def log_exception(message, exception = nil, level: nil)
         log(level || Logger::ERROR, message)
-        raise exception || Aspire::Caching::Exceptions::Error, message
+        raise exception || Aspire::Exceptions::Error, message
       end
 
       # Logs an event and returns its first argument

@@ -2,7 +2,7 @@ require 'fileutils'
 require 'json'
 require 'uri'
 
-require 'aspire/caching/exceptions'
+require 'aspire/exceptions'
 require 'aspire/util'
 
 module Aspire
@@ -66,13 +66,13 @@ module Aspire
       # Parses the URL and checks that it is cacheable
       # @param u [String] the URL of the API object
       # @return [MarchData] the parsed URL
-      # @raise [Aspire::Caching::Exceptions::NotCacheable] if the URL is not
+      # @raise [Aspire::Exceptions::NotCacheable] if the URL is not
       #   cacheable
       def cacheable_url(u)
         # All rules must return true for the URL to be cacheable
         u = parse_url(u)
         CACHEABLE.each do |r|
-          raise Aspire::Caching::Exceptions::NotCacheable unless r.call(u, self)
+          raise Aspire::Exceptions::NotCacheable unless r.call(u, self)
         end
         # Return the parsed URL
         u
@@ -142,7 +142,7 @@ module Aspire
       # @param path [String] the starting file or directory
       # @param root
       # @return [void]
-      # @raise [Aspire::Caching::Exceptions::RemoveError] if the operation fails
+      # @raise [Aspire::Exceptions::RemoveError] if the operation fails
       def rmdir_empty(path, root)
         # The starting path is assumed to be a filename, so we append a dummy
         # filename if it's a directory

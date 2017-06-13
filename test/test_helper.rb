@@ -27,6 +27,7 @@ class Test < Minitest::Test
   end
 
   def json_api
+    @api_available = ENV['ASPIRE_API_AVAILABLE'] == 'true'
     @api_client_id = ENV['ASPIRE_API_CLIENT_ID']
     @api_secret = ENV['ASPIRE_API_SECRET']
     @tenant = ENV['ASPIRE_TENANT']
@@ -36,11 +37,14 @@ class Test < Minitest::Test
   end
 
   def linked_data_api
+    @api_available = ENV['ASPIRE_API_AVAILABLE'] == 'true'
+    @linked_data_root = ENV['ASPIRE_LINKED_DATA_ROOT']
     @tenant = ENV['ASPIRE_TENANT']
     @tenancy_host_aliases = ENV['ASPIRE_TENANCY_HOST_ALIASES'].to_s.split(';')
     @tenancy_root = ENV['ASPIRE_TENANCY_ROOT']
-    required(@tenancy_root, @tenant)
+    required(@linked_data_root, @tenancy_root, @tenant)
     Aspire::API::LinkedData.new(@tenant,
+                                linked_data_root: @linked_data_root,
                                 tenancy_host_aliases: @tenancy_host_aliases,
                                 tenancy_root: @tenancy_root,
                                 **api_opts)
@@ -62,6 +66,25 @@ class Test < Minitest::Test
       refute_empty value
     end
   end
+
+  def user_lookup(store = nil, factory = nil)
+    @user_report = ENV['ASPIRE_USER_REPORT']
+    required(@user_report)
+    Aspire::UserLookup.new(filename: @user_report, store: store)
+  end
+
+  def users_env
+    @users = []
+    (1..3).each do |i|
+      @users[i - 1] = {
+        email: ENV["ASPIRE_USER_EMAIL#{i}"].split(/\s*;\s*/),
+        first_name: ENV["ASPIRE_USER_FIRSTNAME#{i}"],
+        role: ENV["ASPIRE_USER_ROLE#{i}"].split(/\s*;\s*/),
+        surname: ENV["ASPIRE_USER_SURNAME#{i}"],
+        url: ENV["ASPIRE_USER_URL#{i}"]
+      }
+    end
+  end
 end
 
 # The base class for cache test classes
@@ -75,7 +98,7 @@ class CacheTestBase < Test
   end
 
   def teardown
-    @cache.delete if @cache
+    # @cache.delete if @cache
   end
 
   private

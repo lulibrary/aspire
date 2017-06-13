@@ -5,19 +5,20 @@ require 'aspire/enumerator/base'
 module Aspire
   # Enumerator classes for Aspire reading list processing
   module Enumerator
-    # Enumerates rows from an Aspire All Lists report with optional filtering
-    class ListReportEnumerator < Base
+    # Enumerates rows from an exported Aspire report CSV (All Lists, All User
+    # Profiles etc.) with optional filtering
+    class ReportEnumerator < Base
       # @!attribute [rw] file
-      #   @return [String] the filename of the Aspire All Lists report
+      #   @return [String] the filename of the report
       attr_accessor :file
 
       # @!attribute [rw] filters
-      #   @return [Array<Proc>] a list of filters to select lists for processing
+      #   @return [Array<Proc>] a list of filters to select rows for processing
       attr_accessor :filters
 
       # Initialises a new ListReport instance
-      # @param file [String] the filename of the Aspire All Lists report
-      # @param filters [Array<Proc>] a list of filters to select lists for
+      # @param file [String] the filename of the report
+      # @param filters [Array<Proc>] a list of filters to select rows for
       #   processing. Each proc accepts a parsed row from the CSV file and
       #   returns true to accept it or false to reject it. All filters must
       #   return true for the row to be yielded.
@@ -27,7 +28,7 @@ module Aspire
         self.filters = filters
       end
 
-      # Enumerates the list report entries
+      # Enumerates the report rows
       # @return [void]
       def enumerate(*_args, **_kwargs)
         CSV.foreach(file, converters: date_converter, headers: true) do |row|

@@ -1,12 +1,12 @@
 require 'aspire/caching/cache_entry'
-require 'aspire/caching/exceptions'
 require 'aspire/caching/util'
+require 'aspire/exceptions'
 
 module Aspire
   module Caching
     # Reads and writes Aspire API data to and from a file-based cache
     class Cache
-      include Exceptions
+      include Aspire::Exceptions
       include Util
 
       # The default cache directory permissions
@@ -74,7 +74,7 @@ module Aspire
 
       # Clears the cache contents
       # @return [void]
-      # @raise [Aspire::Cache::Exceptions::RemoveError] if the operation fails
+      # @raise [Aspire::Exceptions::RemoveError] if the operation fails
       def clear
         return unless path?
         rm(File.join(path, '*'), logger, 'Cache cleared', 'Cache clear failed')
@@ -82,7 +82,7 @@ module Aspire
 
       # Deletes the cache
       # @return [void]
-      # @raise [Aspire::Cache::Exceptions::RemoveError] if the operation fails
+      # @raise [Aspire::Exceptions::RemoveError] if the operation fails
       def delete
         return unless path?
         rm(path, logger, 'Cache deleted', 'Cache delete failed')
@@ -101,6 +101,13 @@ module Aspire
       def include?(url = nil, entry: nil)
         entry ||= cache_entry(url)
         entry.cached?
+      end
+
+      # Returns the linked data form of the URL
+      # @param url [String] the URL of the API object
+      # @return [String] the linked data URL of the object
+      def linked_data_url(url)
+        ld_api.linked_data_url(url)
       end
 
       # Iterates over a single cache object type and passes the partial object
@@ -168,7 +175,9 @@ module Aspire
       # @yieldparam json [Boolean] true if the data is from the JSON API, false
       #   if it is from the linked data API
       # @return [Hash] the parsed JSON data from the cache or API
-      # @raise [Aspire::Cache::Exceptions::]
+      # @raise [Aspire::Exceptions::APIError] if the API call fails
+      # @raise [Aspire::Exceptions::ReadError] if the cache read fails
+      # @raise [Aspire::Exceptions::WriteError] if the cache write fails
       def read(url = nil,
                entry: nil, json: false, use_api: true, use_cache: true)
         entry ||= cache_entry(url)
@@ -197,9 +206,9 @@ module Aspire
       # @yieldparam data [Hash] the parsed JSON data from the cache or API call
       # @yieldparam entry [Aspire::Caching::CacheEntry] the cache entry
       # @return [Hash, nil] the parsed JSON data removed from the cache
-      # @raise [Aspire::Caching::Exceptions::MarkedError] if the cache entry is
+      # @raise [Aspire::Exceptions::MarkedError] if the cache entry is
       #   marked as in-progress and force is false
-      # @raise [Aspire::Caching::Exceptions::RemoveError] if the operation fails
+      # @raise [Aspire::Exceptions::RemoveError] if the operation fails
       def remove(url = nil, entry: nil, force: false, remove_children: false)
         entry ||= cache_entry(url)
         return nil unless entry.cached?
@@ -231,7 +240,7 @@ module Aspire
       # @yieldparam data [Hash] the parsed JSON data from the cache or API call
       # @yieldparam entry [Aspire::Caching::CacheEntry] the cache entry
       # @return [Hash] the parsed JSON data written to the cache
-      # @raise [Aspire::Caching::Exceptions::WriteError] if the operation fails
+      # @raise [Aspire::Exceptions::WriteError] if the operation fails
       def write(url = nil, data: nil, entry: nil, json: false)
         # Get the cache processing flags
         entry ||= cache_entry(url)
@@ -297,7 +306,7 @@ module Aspire
       #   linked data API data
       # @return [Hash, nil] the parsed JSON data from the cache or nil if the
       #   URL is not cached
-      # @raise [Aspire::Cache::Exceptions::ReadError] if the cache read fails
+      # @raise [Aspire::Exceptions::ReadError] if the cache read fails
       def read_cache(entry, json: false)
         data = entry.read(json, parsed: true)
         msg = "#{entry.url}#{json ? ' [JSON]' : ''} read from cache"
@@ -329,7 +338,7 @@ module Aspire
       # @param entry [Aspire::Caching::CacheEntry] the cache entry
       # @param data [String] the data to be written to the cache
       # @return [void]
-      # @raise [Aspire::Caching::Exceptions::WriteError] if the operation fails
+      # @raise [Aspire::Exceptions::WriteError] if the operation fails
       def write_cache(entry, data = nil, json: false)
         entry.write(data, json)
         file_path = entry.path(json)

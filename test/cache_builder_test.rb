@@ -1,4 +1,4 @@
-require 'aspire/enumerator/list_report_enumerator'
+require 'aspire/enumerator/report_enumerator'
 require 'aspire/util'
 
 require_relative 'test_helper'
@@ -37,7 +37,7 @@ class CacheBuilderTest < CacheTestBase
       proc { |row| !row['Status'].to_s.start_with?('Published') },
       proc { |row| row['Privacy Control'] == 'Public' }
     ]
-    Aspire::Enumerator::ListReportEnumerator.new(@list_report, filters)
+    Aspire::Enumerator::ReportEnumerator.new(@list_report, filters)
                                             .enumerator
   end
 end

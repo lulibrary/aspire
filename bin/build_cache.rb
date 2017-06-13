@@ -6,7 +6,7 @@ require 'optionparser'
 require 'aspire/api/json'
 require 'aspire/api/linked_data'
 require 'aspire/caching/builder'
-require 'aspire/enumerator/list_report_enumerator'
+require 'aspire/enumerator/report_enumerator'
 
 # Maps the command-line field abbreviation to a named field in the All Lists CSV
 fields = {
@@ -60,7 +60,7 @@ def list_enumerator(conf)
   filters = [
     proc { |row| time_periods.include?(row['Time Period']) }
   ]
-  Aspire::Enumerator::ListReportEnumerator.new(conf[:listfile], filters)
+  Aspire::Enumerator::ReportEnumerator.new(conf[:listfile], filters)
                                           .enumerator
 end
 
