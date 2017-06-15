@@ -94,7 +94,7 @@ module Aspire
       # @param value [Object] the initial value of the data
       # @return [Enumerator] the enumerator
       def enumerator(key, value)
-        Enumerator.new do |yielder|
+        ::Enumerator.new do |yielder|
           self.yielder = yielder
           enumerate(key, value)
         end

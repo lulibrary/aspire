@@ -2,6 +2,7 @@ require 'fileutils'
 require 'json'
 require 'uri'
 
+require 'aspire/enumerator/linked_data_uri_enumerator'
 require 'aspire/exceptions'
 require 'aspire/util'
 
@@ -112,7 +113,7 @@ module Aspire
       def references(url, data = nil)
         return [] if data.nil? || data.empty?
         # Enumerate the URIs and add them as keys of a hash to de-duplicate
-        enum = LinkedDataURIEnumerator.new.enumerator(url, data)
+        enum = Aspire::Enumerator::LinkedDataURIEnumerator.new.enumerator(url, data)
         uris = {}
         enum.each { |_k, hash, _i| uris[hash['value']] = true }
         # Return the list of URIs

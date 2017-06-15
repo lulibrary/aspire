@@ -20,7 +20,7 @@ class Test < Minitest::Test
     @ssl_ca_file = ENV['SSL_CA_FILE']
     @ssl_ca_path = ENV['SSL_CA_PATH']
     {
-      logger: @logger,
+      #logger: @logger,
       ssl_ca_file: @ssl_ca_file,
       ssl_ca_path: @ssl_ca_path
     }
@@ -52,12 +52,14 @@ class Test < Minitest::Test
 
   def logger
     @log_file = ENV['ASPIRE_LOG']
-    logger = Logger.new("| tee #{@log_file}") # @log_file || STDOUT)
-    logger.datetime_format = '%Y-%m-%d %H:%M:%S'
-    logger.formatter = proc do |severity, datetime, _program, msg|
-      "#{datetime} [#{severity}]: #{msg}\n"
-    end
-    logger
+    #logger = Logger.new("| tee #{@log_file}") # @log_file || STDOUT)
+    #logger = Logger.new("| tee #{@log_file}") # @log_file || STDOUT)
+    #logger.datetime_format = '%Y-%m-%d %H:%M:%S'
+    #logger.formatter = proc do |severity, datetime, _program, msg|
+    #  "#{datetime} [#{severity}]: #{msg}\n"
+    #end
+    #logger
+    logger = Logglier.new("https://logs-01.loggly.com/inputs/#{ENV['LOGGLIER_TOKEN']}/tag/#{ENV['LOGGLIER_TAG']}/", :threaded => true, :format => :json)
   end
 
   def required(*values)
