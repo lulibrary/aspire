@@ -1,0 +1,11 @@
+#!/bin/sh
+
+TIME_PERIOD=${TIME_PERIOD:-''}
+STATUS=${STATUS:-''}
+PRIVACY_CONTROL=${PRIVACY_CONTROL:-''}
+LIST_URL=${LIST_URL:-''}
+LANG=en_US.UTF-8
+LANGUAGE=en_US.UTF-8
+LC_ALL=en_US.UTF-8
+
+build-cache -t "${TIME_PERIOD}" -s "${STATUS}" -p "${PRIVACY_CONTROL}" -l "${LIST_URL}" -f
