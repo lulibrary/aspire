@@ -4,8 +4,6 @@ require 'aspire/util'
 require 'logglier'
 require 'dotenv'
 
-require 'byebug'
-
 module Aspire
   module CLI
 
