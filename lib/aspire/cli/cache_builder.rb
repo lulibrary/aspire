@@ -53,7 +53,7 @@ module Aspire
       def list_enumerator(time_periods, status, privacy_control)
         filters = [
             proc { |row| time_periods.include?(row['Time Period']) },
-            proc { |row| !row['Status'].to_s.start_with?(status) },
+            proc { |row| row['Status'].to_s.start_with?(status) },
             proc { |row| row['Privacy Control'] == privacy_control }
         ]
 
