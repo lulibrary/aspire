@@ -28,8 +28,6 @@ module Aspire
 
         if list_uri.nil? || list_uri.empty?
 
-          raise ArgumentError if time_period_list.nil? || time_period_list.empty?
-          raise ArgumentError if status.nil? || status.empty?
           raise ArgumentError if privacy_control.nil? || privacy_control.empty?
 
           puts "Caching all lists that match arguments"
@@ -50,12 +48,23 @@ module Aspire
 
       private
 
-      def list_enumerator(time_periods, status, privacy_control)
-        filters = [
-            proc { |row| time_periods.include?(row['Time Period']) },
-            proc { |row| row['Status'].to_s.start_with?(status) },
-            proc { |row| row['Privacy Control'] == privacy_control }
-        ]
+      def list_enumerator(time_periods=nil, status=nil, privacy_control=nil)
+
+        filters = []
+
+        if time_periods.nil? || time_periods.empty? || time_periods == ['']
+          time_periods = [nil, '']
+        end
+
+        filters.push(proc { |row| time_periods.include?(row['Time Period']) })
+
+        unless status.nil? || status.empty?
+          filters.push(proc { |row| row['Status'].to_s.start_with?(status) })
+        end
+
+        unless privacy_control.nil? || status.empty?
+          filters.push(proc { |row| row['Privacy Control'] == privacy_control })
+        end
 
         Aspire::Enumerator::ReportEnumerator.new(@list_report, filters)
             .enumerator
