@@ -1,0 +1,13 @@
+#!/usr/bin/env ruby
+
+require 'bundler/setup'
+require 'aspire'
+require 'raven'
+
+unless ENV['SENTRY_DSN'].nil? || ENV['SENTRY_DSN'].empty?
+  Raven.configure do |config|
+    config.dsn = ENV['SENTRY_DSN']
+  end
+end
+
+Aspire::CLI::CacheBuilder.run

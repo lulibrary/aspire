@@ -161,7 +161,7 @@ module Aspire
         result
       end
 
-      # Returns true if the should be included with the parents, false otherwise
+      # Returns true if ancestor should be included as a parent, false otherwise
       # @param ancestor [Aspire::Object::ListBase] the reading list object
       # Remaining positional parameters are the reading list classes to include
       # in the result. If no classes are specified, all classes are included.

@@ -31,7 +31,7 @@ module Aspire
       # Enumerates the report rows
       # @return [void]
       def enumerate(*_args, **_kwargs)
-        CSV.foreach(file, converters: date_converter, headers: true) do |row|
+        CSV.foreach(file, converters: date_converter, headers: true, encoding: 'ISO-8859-1') do |row|
           yielder << row if filter(row)
         end
       end

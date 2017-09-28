@@ -1,7 +1,15 @@
+require 'byebug'
+require 'logglier'
+require 'raven'
+
 require 'aspire/enumerator/report_enumerator'
 require 'aspire/util'
 
 require_relative 'test_helper'
+
+Raven.configure do |config|
+  config.dsn = ENV['SENTRY_DSN']
+end
 
 # Tests the Aspire::Caching::Builder class
 class CacheBuilderTest < CacheTestBase
@@ -14,10 +22,10 @@ class CacheBuilderTest < CacheTestBase
     @builder = Aspire::Caching::Builder.new(cache)
   end
 
-  def test_build
-    lists = list_enumerator('2016-17', '2015-16')
-    @builder.build(lists, clear: true)
-  end
+  # def test_build
+  #   lists = list_enumerator('2016-17', '2015-16')
+  #   @builder.build(lists, clear: true)
+  # end
 
   # def test_resume
   #   lists = list_enumerator('2016-17', '2015-16')
@@ -28,6 +36,16 @@ class CacheBuilderTest < CacheTestBase
   #   @builder.write_list(@list_url3)
   #   # @builder.write(@list_url2)
   # end
+
+  # def test_section
+  #   @builder.write('http://lancaster.myreadinglists.org/sections/34C1190E-F50E-35CB-94C9-F476963D69C0')
+  # end
+
+  # LAW103X - http://lancaster.myreadinglists.org/lists/A56880F3-10B3-45EC-FD16-D29D0198AEE3
+  # LAW102X - http://lancaster.myreadinglists.org/lists/4510B70F-7C50-D726-4A6C-B129F5EABB2C
+  def test_list
+    @builder.write_list('http://lancaster.myreadinglists.org/lists/4510B70F-7C50-D726-4A6C-B129F5EABB2C')
+  end
 
   private
 

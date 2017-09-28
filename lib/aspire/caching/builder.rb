@@ -96,17 +96,23 @@ module Aspire
         # JSON rather than JSON-LD). These objects are cached but no attempt is
         # made to follow LD references within them.
         #
+        # byebug if url.is_a?(String) && url.include?('34C1190E-F50E-35CB-94C9-F476963D69C0')
+        # byebug if url.is_a?(Aspire::Caching::CacheEntry) && url.url.include?('34C1190E-F50E-35CB-94C9-F476963D69C0')
         entry = cache_entry(url, list)
         return unless entry && write?(entry, urls, list, reload)
         write_data(entry, urls, data, list, reload)
       rescue NotCacheable
-        cache.logger.debug("#{url} not cacheable")
+        # cache.logger.debug("#{url} not cacheable")
       rescue StandardError => e
         # Log the error and continue processing
-        cache.logger.error("#{e}\n#{e.backtrace.join('\n')}")
+        Raven.capture_exception(e)
+        # cache.logger.error("#{e}\n#{e.backtrace.join('\n')}")
+        cache.logger.error(e.to_s)
       rescue Exception => e
         # Log the error and fail
-        cache.logger.fatal("#{e}\n#{e.backtrace.join('\n')}")
+        Raven.capture_exception(e)
+        # cache.logger.fatal("#{e}\n#{e.backtrace.join('\n')}")
+        cache.logger.fatal(e.to_s)
         raise e
       end
 
@@ -124,7 +130,7 @@ module Aspire
         raise ArgumentError, 'List expected' unless entry.list?
         write(entry, data, list: entry, reload: reload)
       rescue NotCacheable
-        cache.logger.debug("#{url} not cacheable")
+        # cache.logger.debug("#{url} not cacheable")
       end
 
       private
@@ -154,7 +160,7 @@ module Aspire
       # @return [Boolean] true if the URL has already been handled, false if not
       def already_handled?(entry, urls)
         return false unless urls.include?(entry.url)
-        cache.logger.debug("#{entry.url} already handled")
+        # cache.logger.debug("#{entry.url} already handled")
         true
       end
 
@@ -301,6 +307,8 @@ module Aspire
         data.each do |url, object|
           # Write each URI to the cache
           references(url, object).each do |uri|
+            # byebug if uri.is_a?(String) && uri.include?('34C1190E-F50E-35CB-94C9-F476963D69C0')
+            # byebug if uri.is_a?(Aspire::Caching::CacheEntry) && uri.url.include?('34C1190E-F50E-35CB-94C9-F476963D69C0')
             write(uri, list: parent_list, reload: reload, urls: urls)
           end
         end
@@ -318,8 +326,10 @@ module Aspire
         # Write all related objects to the cache before caching references
         data.each do |related_url, related_data|
           # The main cache entry should already have been written
+          # byebug if related_url.is_a?(String) && related_url.include?('34C1190E-F50E-35CB-94C9-F476963D69C0')
+          # byebug if related_url.is_a?(Aspire::Caching::CacheEntry) && related_url.url.include?('34C1190E-F50E-35CB-94C9-F476963D69C0')
           next if entry.url == cache.canonical_url(related_url)
-          write(related_url, related_data,
+          write(related_url, {related_url => related_data},
                 list: parent_list, reload: reload, urls: urls)
         end
       end

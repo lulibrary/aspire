@@ -18,7 +18,7 @@ module Aspire
       #     indexed by URI
       attr_accessor :users
 
-      # Initialises a new ReadingListFactory instance
+      # Initialises a new Factory instance
       # @param cache  [Aspire::Caching::Cache] the cache for retrieving data
       # @param users [Hash<String, Aspire::Object::User>] a hash of user
       #   profiles indexed by URI

@@ -33,9 +33,14 @@ Gem::Specification.new do |spec|
   spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
   spec.require_paths = ['lib']
 
+  spec.add_dependency 'logglier', '~> 0.2.11'
   spec.add_dependency 'loofah', '~>2.0.3'
   spec.add_dependency 'rest-client', '~>2.0.2'
+  spec.add_dependency 'sentry-raven'
+  spec.add_dependency "clamp"
+  spec.add_dependency 'dotenv', '~> 2.2.0'
 
+  spec.add_development_dependency 'byebug'
   spec.add_development_dependency 'bundler', '~> 1.14'
   spec.add_development_dependency 'dotenv', '~> 2.2.0'
   spec.add_development_dependency 'rake', '~> 10.0'
