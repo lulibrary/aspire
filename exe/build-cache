@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 
-require "bundler/setup"
-require "aspire"
+require 'bundler/setup'
+require 'aspire'
 require 'raven'
 
 unless ENV['SENTRY_DSN'].nil? || ENV['SENTRY_DSN'].empty?
